@@ -1,3 +1,4 @@
+use crate::error::MsgHandleError;
 use crate::policy::DefaultJobPolicy;
 use anyhow::{bail, Result};
 use rdkafka::message::OwnedMessage;
@@ -151,8 +152,7 @@ fn assert_message(message: OwnedMessage, topic: &str, partition: i32, offset: i6
     assert_eq!(message.payload().unwrap(), payload.as_bytes());
 }
 
-#[actix::test]
-async fn test() {
+fn setup() -> Proc {
     let mut consumer = MockConsumer::new();
     consumer
         .add_message("topic1", create_message("topic1", 0, 0, "message1"))
@@ -167,20 +167,25 @@ async fn test() {
         .add_message("topic2", create_message("topic2", 0, 1, "message4"))
         .unwrap();
 
-    let msgproc = Proc::new(
+    Proc::new(
         vec![],
         Box::new(consumer),
         Box::new(DefaultJobPolicy::new(Duration::from_secs(1), 5)),
         Box::new(DefaultJobPolicy::new(Duration::from_secs(1), 5)),
         Duration::from_secs(5),
-    );
-    let msgproc_addr = msgproc.start();
+    )
+}
+
+#[actix::test]
+async fn test() {
+    let proc = setup();
+    let proc_addr = proc.start();
     let msgstore1 = MsgStore { msgs: vec![] }.start();
     let msgstore2 = MsgStore { msgs: vec![] }.start();
-    let _res = msgproc_addr
+    let _res = proc_addr
         .send(MsgHandler(msgstore1.clone().recipient()))
         .await;
-    let _res = msgproc_addr
+    let _res = proc_addr
         .send(MsgHandler(msgstore2.clone().recipient()))
         .await;
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
@@ -196,4 +201,33 @@ async fn test() {
     assert_message(res2.0[1].clone(), "topic2", 0, 0, "message2");
     assert_message(res2.0[2].clone(), "topic1", 0, 1, "message3");
     assert_message(res2.0[3].clone(), "topic2", 0, 1, "message4");
+}
+
+struct ErrorIssuer;
+
+impl Actor for ErrorIssuer {
+    type Context = Context<Self>;
+}
+
+impl Handler<HandleMsg> for ErrorIssuer {
+    type Result = ();
+
+    fn handle(&mut self, msg: HandleMsg, _ctx: &mut Self::Context) -> Self::Result {
+        let HandleMsg { proc, msg: _ } = msg;
+        proc.do_send(MsgHandleResult(Err(MsgHandleError)));
+        ()
+    }
+}
+
+#[actix::test]
+async fn test_error() {
+    let proc = setup();
+    let proc_addr = proc.start();
+    let err_issuer = ErrorIssuer.start();
+    proc_addr
+        .send(MsgHandler(err_issuer.recipient()))
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    assert!(!proc_addr.connected());
 }

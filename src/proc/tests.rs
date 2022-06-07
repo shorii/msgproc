@@ -109,10 +109,10 @@ impl Actor for MsgStore {
     type Context = Context<Self>;
 }
 
-impl Handler<HandleMsg> for MsgStore {
+impl Handler<Msg> for MsgStore {
     type Result = ();
-    fn handle(&mut self, msg: HandleMsg, _ctx: &mut Self::Context) -> Self::Result {
-        let HandleMsg { proc: _proc, msg } = msg;
+    fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
+        let Msg { proc: _proc, msg } = msg;
         self.msgs.push(msg);
         ()
     }
@@ -209,11 +209,11 @@ impl Actor for ErrorIssuer {
     type Context = Context<Self>;
 }
 
-impl Handler<HandleMsg> for ErrorIssuer {
+impl Handler<Msg> for ErrorIssuer {
     type Result = ();
 
-    fn handle(&mut self, msg: HandleMsg, _ctx: &mut Self::Context) -> Self::Result {
-        let HandleMsg { proc, msg: _ } = msg;
+    fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
+        let Msg { proc, msg: _ } = msg;
         proc.do_send(MsgHandleResult(Err(MsgHandleError)));
         ()
     }

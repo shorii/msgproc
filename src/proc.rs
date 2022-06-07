@@ -5,14 +5,20 @@ use regex::Regex;
 use std::time::Duration;
 
 use crate::consumer::IConsumer;
-use crate::msg::{HandleMsg, Msg, MsgHandleResult, MsgHandler};
+use crate::msg::{InnerMsg, Msg, MsgHandleResult, MsgHandler};
 use crate::policy::IJobPolicy;
 
 struct RegisteredMsgHandler {
     proc: Recipient<MsgHandleResult>,
-    handler: Recipient<HandleMsg>,
+    handler: Recipient<Msg>,
 }
 
+/// kafkaから消費したメッセージを処理するActor
+///
+/// 定期的にメッセージをconsumeし、あらかじめ登録したhandlerにメッセージを配送する。
+/// subscribeするtopicは正規表現で指定できる。
+/// kafkaのtopicは定期的に取得していて、Actorが開始された後にkafkaにtopicが作成された場合であってもsubscribeすることができる。
+/// また、逆にtopicがkafkaから削除された場合にはunsubscribeされる。
 struct Proc {
     topic_patterns: Vec<Regex>,
     topics: Vec<String>,
@@ -24,6 +30,13 @@ struct Proc {
 }
 
 impl Proc {
+    /// 新たにProcを生成する。
+    ///
+    /// * `topic_patterns` - subscribeするtopicの名前に合致する正規表現のVector
+    /// * `consumer` - kafkaからメッセージをconsumeするクライアント
+    /// * `update_topics_policy` - topicを更新する際の間隔やリトライを決めるポリシー
+    /// * `consume_message_policy` - consumeする際のの間隔やリトライを決めるポリシー
+    /// * `timeout` - kafkaの操作時におけるタイムアウト値
     pub fn new(
         topic_patterns: Vec<Regex>,
         consumer: Box<dyn IConsumer>,
@@ -42,10 +55,10 @@ impl Proc {
         }
     }
 
-    fn notify(&self, msg: Msg) {
+    fn notify(&self, msg: InnerMsg) {
         for handler in self.handlers.iter() {
             let RegisteredMsgHandler { handler, proc } = handler;
-            handler.do_send(HandleMsg {
+            handler.do_send(Msg {
                 proc: proc.clone(),
                 msg: msg.0.clone(),
             });
@@ -97,7 +110,7 @@ impl Proc {
         let message = self.consumer.consume(Duration::from_secs(5));
         match message {
             Some(Ok(msg)) => {
-                ctx.address().do_send(Msg(msg.clone()));
+                ctx.address().do_send(InnerMsg(msg.clone()));
                 self.consume_message_policy.reset();
                 let topic = msg.topic();
                 let partition = msg.partition();
@@ -140,10 +153,10 @@ impl Actor for Proc {
     }
 }
 
-impl Handler<Msg> for Proc {
+impl Handler<InnerMsg> for Proc {
     type Result = ();
 
-    fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: InnerMsg, _ctx: &mut Self::Context) -> Self::Result {
         self.notify(msg);
     }
 }

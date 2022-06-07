@@ -1,5 +1,9 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-#[error("Failed to handle Msg")]
-pub struct MsgHandleError;
+pub enum MsgProcError {
+    #[error("HandleError: {0}")]
+    HandleError(String),
+    #[error("KafkaError: {0}")]
+    KafkaError(String),
+}

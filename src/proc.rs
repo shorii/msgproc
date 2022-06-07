@@ -1,15 +1,16 @@
 use actix::prelude::*;
-use log::error;
+use log::{error, warn};
 use rdkafka::message::Message;
 use regex::Regex;
 use std::time::Duration;
 
 use crate::consumer::IConsumer;
-use crate::msg::{InnerMsg, Msg, MsgHandleResult, MsgHandler};
+use crate::kafka_error;
+use crate::msg::{InnerMsg, Msg, MsgHandler, MsgProcResult};
 use crate::policy::IJobPolicy;
 
 struct RegisteredMsgHandler {
-    proc: Recipient<MsgHandleResult>,
+    proc: Recipient<MsgProcResult>,
     handler: Recipient<Msg>,
 }
 
@@ -108,31 +109,28 @@ impl Proc {
 
     fn consume_message(&mut self, ctx: &mut Context<Proc>) {
         let message = self.consumer.consume(Duration::from_secs(5));
+        let addr = ctx.address();
         match message {
             Some(Ok(msg)) => {
-                ctx.address().do_send(InnerMsg(msg.clone()));
+                addr.do_send(InnerMsg(msg.clone()));
                 self.consume_message_policy.reset();
                 let topic = msg.topic();
                 let partition = msg.partition();
                 let offset = msg.offset();
-                let commit = self.consumer.commit(&topic, partition);
-                if commit.is_err() {
-                    error!(
-                        "KafkaError occurred. Failed to commit offset.(topic: {}, partition: {}, offset: {})",
-                        topic, partition, offset
+                if self.consumer.pause(topic, partition).is_err() {
+                    kafka_error!(
+                        addr,
+                        format!(
+                            "Failed to pause topic.(topic: {}, partition: {}, offset: {})",
+                            topic, partition, offset
+                        )
                     );
-                    if self.consume_message_policy.check() {
-                        ctx.stop();
-                        return;
-                    }
-                    self.consume_message_policy.update();
                 }
             }
             Some(Err(_)) => {
-                error!("KafkaError occurred. Offset is not incremented.");
+                warn!("KafkaError occurred. Offset is not incremented.");
                 if self.consume_message_policy.check() {
-                    ctx.stop();
-                    return;
+                    kafka_error!(addr, "Retry limitation reached.");
                 }
                 self.consume_message_policy.update();
             }
@@ -172,13 +170,25 @@ impl Handler<MsgHandler> for Proc {
     }
 }
 
-impl Handler<MsgHandleResult> for Proc {
+impl Handler<MsgProcResult> for Proc {
     type Result = ();
 
-    fn handle(&mut self, msg: MsgHandleResult, ctx: &mut Self::Context) -> Self::Result {
-        if msg.0.is_err() {
-            error!("Failed to handle msg.");
-            ctx.stop();
+    fn handle(&mut self, msg: MsgProcResult, ctx: &mut Self::Context) -> Self::Result {
+        match msg.0 {
+            Ok(owned_msg) => {
+                let topic = owned_msg.topic();
+                let partition = owned_msg.partition();
+                if self.consumer.commit(topic, partition).is_ok() {
+                    if self.consumer.resume(topic, partition).is_ok() {
+                        return;
+                    }
+                }
+                ctx.stop();
+            }
+            Err(e) => {
+                error!("{}", e);
+                ctx.stop();
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::error::MsgHandleError;
+use crate::handle_error;
 use crate::policy::DefaultJobPolicy;
 use anyhow::{bail, Result};
 use rdkafka::message::OwnedMessage;
@@ -214,7 +214,7 @@ impl Handler<Msg> for ErrorIssuer {
 
     fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
         let Msg { proc, msg: _ } = msg;
-        proc.do_send(MsgHandleResult(Err(MsgHandleError)));
+        handle_error!(proc, "Error issued!");
         ()
     }
 }

@@ -112,7 +112,7 @@ impl Actor for MsgStore {
 impl Handler<Msg> for MsgStore {
     type Result = ();
     fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
-        let Msg { proc: _proc, msg } = msg;
+        let Msg { proc, msg } = msg;
         self.msgs.push(msg);
         ()
     }

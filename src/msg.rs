@@ -2,11 +2,11 @@ use crate::error::MsgProcError;
 use actix::prelude::*;
 use rdkafka::message::OwnedMessage;
 
-#[derive(Message, Clone)]
+#[derive(Message)]
 #[rtype(result = "()")]
 pub struct InnerMsg(pub OwnedMessage);
 
-#[derive(Message, Clone)]
+#[derive(Message)]
 #[rtype(result = "()")]
 pub struct Msg {
     pub proc: Recipient<MsgProcResult>,

@@ -6,7 +6,7 @@ use rdkafka::topic_partition_list::Offset;
 use rdkafka::TopicPartitionList;
 use std::time::Duration;
 
-/// [crate::proc::MsgProc]でConsumerを扱う際の一般的な表現。
+/// [crate::msgproc::MsgProc]でConsumerを扱う際の一般的な表現。
 pub trait IConsumer: Send + Sync {
     /// 存在するトピックの一覧を取得する。
     fn get_topics(&self, timeout: Duration) -> Result<Vec<String>>;

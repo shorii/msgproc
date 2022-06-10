@@ -6,9 +6,9 @@ use uuid::Uuid;
 
 /// ユーザ定義の[Handler]で処理するデータ型
 ///
-/// kafkaから[crate::consumer::IConsumer::consume]されたデータと[crate::proc::MsgProc]を制御するためのデータが定義されており、データの入れ物としてだけでなく
-/// ユーザ定義の[Handler]から[crate::proc::MsgProc]への結果返却をする役割も担っている。
-/// [Drop]トレイトが実装されており、[Handler]の[Handler::handle]関数のスコープから外れた際に[crate::proc::MsgProc]へ結果を返却するようになっている。
+/// kafkaから[crate::consumer::IConsumer::consume]されたデータと[crate::msgproc::MsgProc]を制御するためのデータが定義されており、データの入れ物としてだけでなく
+/// ユーザ定義の[Handler]から[crate::msgproc::MsgProc]への結果返却をする役割も担っている。
+/// [Drop]トレイトが実装されており、[Handler]の[Handler::handle]関数のスコープから外れた際に[crate::msgproc::MsgProc]へ結果を返却するようになっている。
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Msg {
@@ -30,7 +30,7 @@ impl Msg {
 
     /// [Msg]にエラーメッセージを設定する。
     ///
-    /// ユーザ定義の[Handler]の[Handler::handle]関数で最終的に[Msg]が[Drop::drop]される際に、エラーを表す結果が[crate::proc::MsgProc]に送信され、[crate::proc::MsgProc]全体が停止される。
+    /// ユーザ定義の[Handler]の[Handler::handle]関数で最終的に[Msg]が[Drop::drop]される際に、エラーを表す結果が[crate::msgproc::MsgProc]に送信され、[crate::msgproc::MsgProc]全体が停止される。
     ///
     /// * `error_msg` - 返却するエラーに設定するメッセージ
     pub fn mark_as_error(&self, error_msg: String) {

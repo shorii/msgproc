@@ -1,5 +1,5 @@
 pub mod consumer;
-pub mod error;
+mod error;
 pub mod msg;
+pub mod msgproc;
 pub mod policy;
-pub mod proc;

@@ -1,4 +1,3 @@
-use crate::error::MsgHandleError;
 use crate::policy::DefaultJobPolicy;
 use anyhow::{bail, Result};
 use rdkafka::message::OwnedMessage;
@@ -109,11 +108,10 @@ impl Actor for MsgStore {
     type Context = Context<Self>;
 }
 
-impl Handler<HandleMsg> for MsgStore {
+impl Handler<Msg> for MsgStore {
     type Result = ();
-    fn handle(&mut self, msg: HandleMsg, _ctx: &mut Self::Context) -> Self::Result {
-        let HandleMsg { proc: _proc, msg } = msg;
-        self.msgs.push(msg);
+    fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
+        self.msgs.push(msg.get_owned_message());
         ()
     }
 }
@@ -152,7 +150,7 @@ fn assert_message(message: OwnedMessage, topic: &str, partition: i32, offset: i6
     assert_eq!(message.payload().unwrap(), payload.as_bytes());
 }
 
-fn setup() -> Proc {
+fn setup() -> MsgProc {
     let mut consumer = MockConsumer::new();
     consumer
         .add_message("topic1", create_message("topic1", 0, 0, "message1"))
@@ -167,7 +165,7 @@ fn setup() -> Proc {
         .add_message("topic2", create_message("topic2", 0, 1, "message4"))
         .unwrap();
 
-    Proc::new(
+    MsgProc::new(
         vec![],
         Box::new(consumer),
         Box::new(DefaultJobPolicy::new(Duration::from_secs(1), 5)),
@@ -183,10 +181,10 @@ async fn test() {
     let msgstore1 = MsgStore { msgs: vec![] }.start();
     let msgstore2 = MsgStore { msgs: vec![] }.start();
     let _res = proc_addr
-        .send(MsgHandler(msgstore1.clone().recipient()))
+        .send(MsgProcessor(msgstore1.clone().recipient()))
         .await;
     let _res = proc_addr
-        .send(MsgHandler(msgstore2.clone().recipient()))
+        .send(MsgProcessor(msgstore2.clone().recipient()))
         .await;
     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 
@@ -209,12 +207,11 @@ impl Actor for ErrorIssuer {
     type Context = Context<Self>;
 }
 
-impl Handler<HandleMsg> for ErrorIssuer {
+impl Handler<Msg> for ErrorIssuer {
     type Result = ();
 
-    fn handle(&mut self, msg: HandleMsg, _ctx: &mut Self::Context) -> Self::Result {
-        let HandleMsg { proc, msg: _ } = msg;
-        proc.do_send(MsgHandleResult(Err(MsgHandleError)));
+    fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
+        msg.mark_as_error("Error issued!".to_string());
         ()
     }
 }
@@ -225,7 +222,7 @@ async fn test_error() {
     let proc_addr = proc.start();
     let err_issuer = ErrorIssuer.start();
     proc_addr
-        .send(MsgHandler(err_issuer.recipient()))
+        .send(MsgProcessor(err_issuer.recipient()))
         .await
         .unwrap();
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;

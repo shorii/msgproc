@@ -15,6 +15,10 @@ $ sudo apt-get install libpthread-stubs0-dev \
 > libzstd-dev #optional
 ```
 
+## Documentation
+
+* [API Documentation](https://shorii.github.io/msgproc/msgproc/)
+
 ## Build
 
 ```sh

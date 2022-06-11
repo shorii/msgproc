@@ -33,9 +33,9 @@ impl Msg {
     /// ユーザ定義の[Handler]の[Handler::handle]関数で最終的に[Msg]が[Drop::drop]される際に、エラーを表す結果が[crate::msgproc::MsgProc]に送信され、[crate::msgproc::MsgProc]全体が停止される。
     ///
     /// * `error_msg` - 返却するエラーに設定するメッセージ
-    pub fn mark_as_error(&self, error_msg: String) {
+    pub fn mark_as_error(&self, error_msg: &str) {
         let mut e = self.error_msg.borrow_mut();
-        *e = Some(error_msg);
+        *e = Some(error_msg.to_string());
     }
 
     /// kafkaから[crate::consumer::IConsumer::consume]されたメッセージを取得する。
@@ -63,11 +63,11 @@ impl Drop for Msg {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub(crate) struct InnerMsg(pub OwnedMessage);
+pub struct MsgProcessor(pub Recipient<Msg>);
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub(crate) struct MsgProcessor(pub Recipient<Msg>);
+pub(crate) struct InnerMsg(pub OwnedMessage);
 
 pub(crate) struct MsgProcessorDescriptor {
     pub message: OwnedMessage,

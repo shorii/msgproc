@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["msgproc"] = [{"text":"impl Handler&lt;<a class=\"struct\" href=\"msgproc/msg/struct.MsgProcessor.html\" title=\"struct msgproc::msg::MsgProcessor\">MsgProcessor</a>&gt; for <a class=\"struct\" href=\"msgproc/msgproc/struct.MsgProc.html\" title=\"struct msgproc::msgproc::MsgProc\">MsgProc</a>","synthetic":false,"types":["msgproc::msgproc::MsgProc"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

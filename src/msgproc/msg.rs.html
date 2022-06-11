@@ -117,9 +117,9 @@
     <span class="doccomment">/// ユーザ定義の[Handler]の[Handler::handle]関数で最終的に[Msg]が[Drop::drop]される際に、エラーを表す結果が[crate::msgproc::MsgProc]に送信され、[crate::msgproc::MsgProc]全体が停止される。</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// * `error_msg` - 返却するエラーに設定するメッセージ</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">mark_as_error</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">error_msg</span>: <span class="ident">String</span>) {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">mark_as_error</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">error_msg</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">e</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">error_msg</span>.<span class="ident">borrow_mut</span>();
-        <span class="kw-2">*</span><span class="ident">e</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">error_msg</span>);
+        <span class="kw-2">*</span><span class="ident">e</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">error_msg</span>.<span class="ident">to_string</span>());
     }
 
     <span class="doccomment">/// kafkaから[crate::consumer::IConsumer::consume]されたメッセージを取得する。</span>
@@ -147,11 +147,11 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Message</span>)]</span>
 <span class="attribute">#[<span class="ident">rtype</span>(<span class="ident">result</span> <span class="op">=</span> <span class="string">&quot;()&quot;</span>)]</span>
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">InnerMsg</span>(<span class="kw">pub</span> <span class="ident">OwnedMessage</span>);
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MsgProcessor</span>(<span class="kw">pub</span> <span class="ident">Recipient</span><span class="op">&lt;</span><span class="ident">Msg</span><span class="op">&gt;</span>);
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Message</span>)]</span>
 <span class="attribute">#[<span class="ident">rtype</span>(<span class="ident">result</span> <span class="op">=</span> <span class="string">&quot;()&quot;</span>)]</span>
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">MsgProcessor</span>(<span class="kw">pub</span> <span class="ident">Recipient</span><span class="op">&lt;</span><span class="ident">Msg</span><span class="op">&gt;</span>);
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">InnerMsg</span>(<span class="kw">pub</span> <span class="ident">OwnedMessage</span>);
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">MsgProcessorDescriptor</span> {
     <span class="kw">pub</span> <span class="ident">message</span>: <span class="ident">OwnedMessage</span>,

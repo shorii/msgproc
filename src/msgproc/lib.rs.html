@@ -8,7 +8,163 @@
 <span id="3">3</span>
 <span id="4">4</span>
 <span id="5">5</span>
-</pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">consumer</span>;
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+</pre><pre class="rust"><code><span class="doccomment">//! kafkaのConsumerのトピックごとのオフセットなどをユーザ定義の</span>
+<span class="doccomment">//! 処理の結果に応じて管理するライブラリ。</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ### Features</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - トピックごとにオフセットを処理の結果に応じて管理</span>
+<span class="doccomment">//! - トピックを正規表現によって指定可能で、[msgproc::MsgProc]動作中にkafkaに存在するトピックが変化した場合自動的に更新</span>
+<span class="doccomment">//! - ポリシーによるkafkaとのやり取り失敗時の挙動の制御、メッセージの消費速度、トピック更新速度の制御</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ### Examples</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ```no_run</span>
+<span class="doccomment">//! use msgproc::policy::DefaultJobPolicy;</span>
+<span class="doccomment">//! use msgproc::msgproc::MsgProc;</span>
+<span class="doccomment">//! use msgproc::msg::{Msg, MsgProcessor};</span>
+<span class="doccomment">//! use rdkafka::consumer::BaseConsumer;</span>
+<span class="doccomment">//! use rdkafka::ClientConfig;</span>
+<span class="doccomment">//! use std::time::Duration;</span>
+<span class="doccomment">//! use regex::Regex;</span>
+<span class="doccomment">//! use actix::prelude::*;</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! struct PrintProcessor;</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! fn something_went_wrong() -&gt; bool {</span>
+<span class="doccomment">//!     true</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! impl Actor for PrintProcessor {</span>
+<span class="doccomment">//!     type Context = Context&lt;Self&gt;;</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! impl Handler&lt;Msg&gt; for PrintProcessor {</span>
+<span class="doccomment">//!     type Result = ();</span>
+<span class="doccomment">//!     fn handle(&amp;mut self, msg: Msg, ctx: &amp;mut Self::Context) -&gt; Self::Result {</span>
+<span class="doccomment">//!         let owned_message = msg.get_owned_message();</span>
+<span class="doccomment">//!         if something_went_wrong() {</span>
+<span class="doccomment">//!             msg.mark_as_error(&quot;Something went wrong!&quot;)</span>
+<span class="doccomment">//!         } else {</span>
+<span class="doccomment">//!             println!(&quot;{:?}&quot;, owned_message);</span>
+<span class="doccomment">//!         }</span>
+<span class="doccomment">//!     }</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! #[actix::main]</span>
+<span class="doccomment">//! async fn main() {</span>
+<span class="doccomment">//!     let topic_patterns = vec![</span>
+<span class="doccomment">//!         Regex::new(&quot;^sample-.*&quot;).unwrap()</span>
+<span class="doccomment">//!     ];</span>
+<span class="doccomment">//!     let consumer: Box&lt;BaseConsumer&gt; = Box::new(</span>
+<span class="doccomment">//!         ClientConfig::new()</span>
+<span class="doccomment">//!             .set(&quot;group_id&quot;, &quot;group1&quot;)</span>
+<span class="doccomment">//!             .set(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;)</span>
+<span class="doccomment">//!             .set(&quot;enable.auto.commit&quot;, &quot;false&quot;)</span>
+<span class="doccomment">//!             .set(&quot;session.timeout.ms&quot;, &quot;6000&quot;)</span>
+<span class="doccomment">//!             .create().unwrap()</span>
+<span class="doccomment">//!     );</span>
+<span class="doccomment">//!     let update_topic_policy = Box::new(</span>
+<span class="doccomment">//!         DefaultJobPolicy::new(Duration::from_secs(3600), 5)</span>
+<span class="doccomment">//!     );</span>
+<span class="doccomment">//!     let consume_message_policy = Box::new(</span>
+<span class="doccomment">//!         DefaultJobPolicy::new(Duration::from_secs(0), 5)</span>
+<span class="doccomment">//!     );</span>
+<span class="doccomment">//!     let timeout = Duration::from_secs(5);</span>
+<span class="doccomment">//!     let msgproc = MsgProc::new(</span>
+<span class="doccomment">//!         topic_patterns,</span>
+<span class="doccomment">//!         consumer,</span>
+<span class="doccomment">//!         update_topic_policy,</span>
+<span class="doccomment">//!         consume_message_policy,</span>
+<span class="doccomment">//!         timeout,</span>
+<span class="doccomment">//!     );</span>
+<span class="doccomment">//!     let msgproc_addr = msgproc.start();</span>
+<span class="doccomment">//!     msgproc_addr</span>
+<span class="doccomment">//!         .send(MsgProcessor(PrintProcessor.start().recipient()))</span>
+<span class="doccomment">//!         .await</span>
+<span class="doccomment">//!         .unwrap();</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//! ```</span>
+
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">consumer</span>;
 <span class="kw">mod</span> <span class="ident">error</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">msg</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">msgproc</span>;

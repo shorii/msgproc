@@ -211,7 +211,7 @@ impl Handler<Msg> for ErrorIssuer {
     type Result = ();
 
     fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
-        msg.mark_as_error("Error issued!".to_string());
+        msg.mark_as_error("Error issued!");
         ()
     }
 }

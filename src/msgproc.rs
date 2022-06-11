@@ -102,7 +102,7 @@ impl MsgProc {
             processors: vec![],
             update_topics_policy,
             consume_message_policy,
-            timeout: timeout,
+            timeout,
         }
     }
 
@@ -113,7 +113,7 @@ impl MsgProc {
                 processor,
                 proc,
             } = processor;
-            processor.do_send(Msg::new(proc.clone(), msg.0.clone(), id.clone()));
+            processor.do_send(Msg::new(proc.clone(), msg.0.clone(), *id));
             let context = self.topic_management.get_mut(&key!(msg.0)).unwrap();
             context.notify(*id);
         }
@@ -134,12 +134,16 @@ impl MsgProc {
                     })
                     .collect::<Vec<_>>();
                 self.consumer.unsubscribe();
-                if let Ok(_) = self.consumer.subscribe(
-                    &matched_topics
-                        .iter()
-                        .map(|s| s.as_str())
-                        .collect::<Vec<_>>(),
-                ) {
+                if self
+                    .consumer
+                    .subscribe(
+                        &matched_topics
+                            .iter()
+                            .map(|s| s.as_str())
+                            .collect::<Vec<_>>(),
+                    )
+                    .is_ok()
+                {
                     self.topics = matched_topics;
                     self.update_topics_policy.reset();
                     return;
@@ -241,10 +245,10 @@ impl Handler<MsgProcResult> for MsgProc {
                     if context.done(handler_id) {
                         let topic = message.topic();
                         let partition = message.partition();
-                        if self.consumer.commit(topic, partition).is_ok() {
-                            if self.consumer.resume(topic, partition).is_ok() {
-                                return;
-                            }
+                        if self.consumer.commit(topic, partition).is_ok()
+                            && self.consumer.resume(topic, partition).is_ok()
+                        {
+                            return;
                         }
                     } else {
                         return;

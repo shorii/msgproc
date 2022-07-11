@@ -22,12 +22,13 @@ pub fn create_message_processor(testcase: &str) -> MsgProc {
             .set("bootstrap.servers", "localhost:9092")
             .set("enable.auto.commit", "false")
             .set("session.timeout.ms", "6000")
+            .set("auto.offset.reset", "earliest")
             .create()
             .unwrap(),
     );
     consumer.subscribe(&["integration_test1"]).unwrap();
     let update_topic_policy = Box::new(DefaultJobPolicy::new(Duration::from_secs(3600), 5));
-    let consume_message_policy = Box::new(DefaultJobPolicy::new(Duration::from_secs(0), 5));
+    let consume_message_policy = Box::new(DefaultJobPolicy::new(Duration::from_secs(1), 5));
     let timeout = Duration::from_secs(5);
     MsgProc::new(
         topic_patterns,

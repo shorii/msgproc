@@ -81,7 +81,7 @@ impl IConsumer for MockConsumer {
         Ok(())
     }
 
-    fn commit(&self, topic: &str, partition: i32) -> Result<()> {
+    fn commit(&self, topic: &str, partition: i32, _offset: i64) -> Result<()> {
         let mut current_commits = self.commits.write().unwrap();
         current_commits.push((topic.to_string(), partition));
         Ok(())

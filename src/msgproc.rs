@@ -245,11 +245,10 @@ impl Handler<MsgProcResult> for MsgProc {
                     if context.done(handler_id) {
                         let topic = message.topic();
                         let partition = message.partition();
-                        if self.consumer.commit(topic, partition).is_ok()
-                            && self.consumer.resume(topic, partition).is_ok()
-                        {
-                            return;
-                        }
+                        let offset = message.offset();
+                        self.consumer.commit(topic, partition, offset).unwrap();
+                        self.consumer.resume(topic, partition).unwrap();
+                        return;
                     } else {
                         return;
                     }

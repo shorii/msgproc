@@ -48,7 +48,7 @@
 //!     ];
 //!     let consumer: Box<BaseConsumer> = Box::new(
 //!         ClientConfig::new()
-//!             .set("group_id", "group1")
+//!             .set("group.id", "group1")
 //!             .set("bootstrap.servers", "localhost:9092")
 //!             .set("enable.auto.commit", "false")
 //!             .set("session.timeout.ms", "6000")

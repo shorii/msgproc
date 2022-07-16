@@ -1,3 +1,4 @@
+use crate::actors::msg::process;
 use crate::error::MsgProcError;
 use actix::prelude::*;
 use rdkafka::message::OwnedMessage;
@@ -12,14 +13,18 @@ use uuid::Uuid;
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Msg {
-    proc: Recipient<MsgProcResult>,
+    proc: Recipient<process::DoneRequest>,
     msg: OwnedMessage,
     handler_id: Uuid,
     error_msg: RefCell<Option<String>>,
 }
 
 impl Msg {
-    pub(crate) fn new(proc: Recipient<MsgProcResult>, msg: OwnedMessage, handler_id: Uuid) -> Self {
+    pub(crate) fn new(
+        proc: Recipient<process::DoneRequest>,
+        msg: OwnedMessage,
+        handler_id: Uuid,
+    ) -> Self {
         Self {
             proc,
             msg,
@@ -49,31 +54,52 @@ impl Drop for Msg {
         match self.error_msg.borrow().clone() {
             Some(error_msg) => {
                 self.proc
-                    .do_send(MsgProcResult(Err(MsgProcError::HandleError(error_msg))));
+                    .do_send(process::DoneRequest(Err(MsgProcError::HandleError(
+                        error_msg,
+                    ))));
             }
             None => {
-                self.proc.do_send(MsgProcResult(Ok(MsgProcessorDescriptor {
-                    message: self.msg.clone(),
-                    processor_id: self.handler_id,
-                })));
+                self.proc
+                    .do_send(process::DoneRequest(Ok(process::ProcessDescriptor {
+                        message: self.msg.clone(),
+                        processor_id: self.handler_id,
+                    })));
             }
         }
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct MsgProcessor(pub Recipient<Msg>);
+//impl Drop for Msg {
+//    fn drop(&mut self) {
+//        match self.error_msg.borrow().clone() {
+//            Some(error_msg) => {
+//                self.proc
+//                    .do_send(MsgProcResult(Err(MsgProcError::HandleError(error_msg))));
+//            }
+//            None => {
+//                self.proc.do_send(MsgProcResult(Ok(MsgProcessorDescriptor {
+//                    message: self.msg.clone(),
+//                    processor_id: self.handler_id,
+//                })));
+//            }
+//        }
+//    }
+//}
 
-#[derive(Message)]
-#[rtype(result = "()")]
-pub(crate) struct InnerMsg(pub OwnedMessage);
-
-pub(crate) struct MsgProcessorDescriptor {
-    pub message: OwnedMessage,
-    pub processor_id: Uuid,
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub(crate) struct MsgProcResult(pub Result<MsgProcessorDescriptor, MsgProcError>);
+//#[derive(Message)]
+//#[rtype(result = "()")]
+//pub struct MsgProcessor(pub Recipient<Msg>);
+//
+//#[derive(Message)]
+//#[rtype(result = "()")]
+//pub(crate) struct InnerMsg(pub OwnedMessage);
+//
+//pub(crate) struct MsgProcessorDescriptor {
+//    pub message: OwnedMessage,
+//    pub processor_id: Uuid,
+//}
+//
+//#[derive(Message)]
+//#[rtype(result = "()")]
+//pub(crate) struct MsgProcResult(pub Result<MsgProcessorDescriptor, MsgProcError>);
+//

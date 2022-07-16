@@ -76,8 +76,8 @@
 //! }
 //! ```
 
-pub mod consumer;
+mod actors;
 mod error;
+mod kafka;
 pub mod msg;
-pub mod msgproc;
 pub mod policy;

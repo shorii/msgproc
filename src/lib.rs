@@ -76,8 +76,8 @@
 //! }
 //! ```
 
-mod error;
+pub mod error;
 mod internal;
-mod kafka;
+pub mod kafka;
 pub mod msg;
 pub mod msgproc;

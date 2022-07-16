@@ -23,19 +23,23 @@ pub struct ConsumeActor {
     threads: Vec<JoinHandle<()>>,
     offsets: Arc<RwLock<HashMap<TopicManagementKey, TopicOffsetManagementContext>>>,
     consumer: Arc<Box<dyn IConsumer>>,
-    recipient: Option<Recipient<process::NotifyRequest>>,
+    recipient: Recipient<process::NotifyRequest>,
     parallels: usize,
     signal_bus: Option<channel::Sender<Signal>>,
     stopping: AtomicBool,
 }
 
 impl ConsumeActor {
-    pub fn new(consumer: Box<dyn IConsumer>, parallels: usize) -> Self {
+    pub fn new(
+        consumer: Arc<Box<dyn IConsumer>>,
+        parallels: usize,
+        recipient: Recipient<process::NotifyRequest>,
+    ) -> Self {
         Self {
             threads: vec![],
             offsets: Arc::new(RwLock::new(HashMap::new())),
-            consumer: Arc::new(consumer),
-            recipient: None,
+            consumer: consumer,
+            recipient: recipient,
             parallels,
             signal_bus: None,
             stopping: AtomicBool::new(false),
@@ -62,10 +66,6 @@ impl ConsumeActor {
             let consumer = Arc::clone(&self.consumer);
             let recipient = self.recipient.clone();
             thread::spawn(move || loop {
-                if recipient.is_none() {
-                    continue;
-                }
-                let recipient = recipient.as_ref().unwrap();
                 match signal_bus.try_recv() {
                     Ok(Signal::END) => {
                         break;
@@ -203,12 +203,5 @@ impl Handler<consume::StopRequest> for ConsumeActor {
             }
         }
         ctx.stop();
-    }
-}
-
-impl Handler<consume::SetupRequest> for ConsumeActor {
-    type Result = ();
-    fn handle(&mut self, msg: consume::SetupRequest, _ctx: &mut Self::Context) -> Self::Result {
-        self.recipient = Some(msg.0);
     }
 }

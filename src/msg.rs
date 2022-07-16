@@ -1,5 +1,5 @@
-use crate::actors::msg::process;
 use crate::error::MsgProcError;
+use crate::internal::msg::process;
 use actix::prelude::*;
 use rdkafka::message::OwnedMessage;
 use std::cell::RefCell;

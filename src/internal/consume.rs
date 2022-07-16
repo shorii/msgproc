@@ -1,4 +1,4 @@
-use crate::actors::msg::{consume, process};
+use crate::internal::msg::{consume, process};
 use crate::kafka::consumer::IConsumer;
 use crate::kafka::key::{key, TopicManagementKey};
 use actix::prelude::*;
@@ -23,23 +23,19 @@ pub struct ConsumeActor {
     threads: Vec<JoinHandle<()>>,
     offsets: Arc<RwLock<HashMap<TopicManagementKey, TopicOffsetManagementContext>>>,
     consumer: Arc<Box<dyn IConsumer>>,
-    recipient: Recipient<process::NotifyRequest>,
-    parallels: u8,
+    recipient: Option<Recipient<process::NotifyRequest>>,
+    parallels: usize,
     signal_bus: Option<channel::Sender<Signal>>,
     stopping: AtomicBool,
 }
 
 impl ConsumeActor {
-    pub fn new(
-        consumer: Box<dyn IConsumer>,
-        recipient: Recipient<process::NotifyRequest>,
-        parallels: u8,
-    ) -> Self {
+    pub fn new(consumer: Box<dyn IConsumer>, parallels: usize) -> Self {
         Self {
             threads: vec![],
             offsets: Arc::new(RwLock::new(HashMap::new())),
             consumer: Arc::new(consumer),
-            recipient,
+            recipient: None,
             parallels,
             signal_bus: None,
             stopping: AtomicBool::new(false),
@@ -66,6 +62,10 @@ impl ConsumeActor {
             let consumer = Arc::clone(&self.consumer);
             let recipient = self.recipient.clone();
             thread::spawn(move || loop {
+                if recipient.is_none() {
+                    continue;
+                }
+                let recipient = recipient.as_ref().unwrap();
                 match signal_bus.try_recv() {
                     Ok(Signal::END) => {
                         break;
@@ -203,5 +203,12 @@ impl Handler<consume::StopRequest> for ConsumeActor {
             }
         }
         ctx.stop();
+    }
+}
+
+impl Handler<consume::SetupRequest> for ConsumeActor {
+    type Result = ();
+    fn handle(&mut self, msg: consume::SetupRequest, _ctx: &mut Self::Context) -> Self::Result {
+        self.recipient = Some(msg.0);
     }
 }

@@ -19,6 +19,10 @@ pub mod consume {
     #[derive(Message)]
     #[rtype(result = "()")]
     pub struct StopRequest;
+
+    #[derive(Message)]
+    #[rtype(result = "()")]
+    pub struct SetupRequest(pub Recipient<process::NotifyRequest>);
 }
 
 pub mod process {
@@ -40,4 +44,11 @@ pub mod process {
     #[derive(Message)]
     #[rtype(result = "()")]
     pub struct DoneRequest(pub Result<ProcessDescriptor, MsgProcError>);
+
+    #[derive(Message)]
+    #[rtype(result = "()")]
+    pub struct SetupRequest {
+        pub commit_recipient: Recipient<consume::CommitRequest>,
+        pub stop_recipient: Recipient<consume::StopRequest>,
+    }
 }

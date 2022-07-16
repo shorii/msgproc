@@ -3,7 +3,7 @@ use rdkafka::message::Message;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::actors::msg::{consume, process};
+use crate::internal::msg::{consume, process};
 use crate::kafka::key::{key, TopicManagementKey};
 use crate::msg::Msg;
 
@@ -36,23 +36,20 @@ impl TopicManagementContext {
     }
 }
 
-struct ProcessActor {
+pub struct ProcessActor {
     contexts: HashMap<TopicManagementKey, TopicManagementContext>,
     processors: Vec<Processor>,
-    commit_recipient: Recipient<consume::CommitRequest>,
-    stop_recipient: Recipient<consume::StopRequest>,
+    commit_recipient: Option<Recipient<consume::CommitRequest>>,
+    stop_recipient: Option<Recipient<consume::StopRequest>>,
 }
 
 impl ProcessActor {
-    pub fn new(
-        commit_recipient: Recipient<consume::CommitRequest>,
-        stop_recipient: Recipient<consume::StopRequest>,
-    ) -> Self {
+    pub fn new() -> Self {
         Self {
             contexts: HashMap::new(),
             processors: vec![],
-            commit_recipient,
-            stop_recipient,
+            commit_recipient: None,
+            stop_recipient: None,
         }
     }
 }
@@ -102,13 +99,26 @@ impl Handler<process::DoneRequest> for ProcessActor {
                 if let Some(context) = context {
                     if context.done(processor_id) {
                         self.commit_recipient
+                            .as_ref()
+                            .unwrap()
                             .do_send(consume::CommitRequest(key!(message)));
                     }
                 }
             }
             Err(_) => {
-                self.stop_recipient.do_send(consume::StopRequest);
+                self.stop_recipient
+                    .as_ref()
+                    .unwrap()
+                    .do_send(consume::StopRequest);
             }
         };
+    }
+}
+
+impl Handler<process::SetupRequest> for ProcessActor {
+    type Result = ();
+    fn handle(&mut self, msg: process::SetupRequest, _ctx: &mut Self::Context) -> Self::Result {
+        self.commit_recipient = Some(msg.commit_recipient);
+        self.stop_recipient = Some(msg.stop_recipient);
     }
 }

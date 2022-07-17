@@ -48,7 +48,7 @@
 //!     ];
 //!     let consumer: Box<BaseConsumer> = Box::new(
 //!         ClientConfig::new()
-//!             .set("group_id", "group1")
+//!             .set("group.id", "group1")
 //!             .set("bootstrap.servers", "localhost:9092")
 //!             .set("enable.auto.commit", "false")
 //!             .set("session.timeout.ms", "6000")
@@ -76,8 +76,8 @@
 //! }
 //! ```
 
-pub mod consumer;
-mod error;
+pub mod error;
+mod internal;
+pub mod kafka;
 pub mod msg;
 pub mod msgproc;
-pub mod policy;

@@ -24,7 +24,7 @@ pub trait IConsumer: Send + Sync {
     fn seek(&self, topic: &str, partition: i32, offset: Offset, timeout: Duration) -> Result<()>;
 
     /// Consumerのオフセットをコミットする。
-    fn commit(&self, topic: &str, partition: i32) -> Result<()>;
+    fn commit(&self, topic: &str, partition: i32, offset: i64) -> Result<()>;
 
     /// consumeを一時的に停止する。
     fn pause(&self, topic: &str, partition: i32) -> Result<()>;
@@ -66,10 +66,11 @@ impl IConsumer for BaseConsumer {
         RdKafkaConsumer::seek(self, topic, partition, offset, timeout).map_err(|e| e.into())
     }
 
-    fn commit(&self, topic: &str, partition: i32) -> Result<()> {
+    fn commit(&self, topic: &str, partition: i32, offset: i64) -> Result<()> {
         let partitions = {
             let mut p = TopicPartitionList::new();
-            p.add_partition(topic, partition);
+            p.add_partition_offset(topic, partition, Offset::Offset(offset + 1))
+                .unwrap();
             p
         };
         RdKafkaConsumer::commit(self, &partitions, CommitMode::Sync).map_err(|e| e.into())

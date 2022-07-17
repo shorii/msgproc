@@ -69,7 +69,7 @@ impl IConsumer for BaseConsumer {
     fn commit(&self, topic: &str, partition: i32, offset: i64) -> Result<()> {
         let partitions = {
             let mut p = TopicPartitionList::new();
-            p.add_partition_offset(topic, partition, Offset::Offset(offset))
+            p.add_partition_offset(topic, partition, Offset::Offset(offset + 1))
                 .unwrap();
             p
         };

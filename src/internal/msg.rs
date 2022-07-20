@@ -1,8 +1,7 @@
-use crate::error::MsgProcError;
-use crate::kafka::key::TopicManagementKey;
-use crate::msg::Msg;
+use crate::kafka::key::Topic;
 use actix::prelude::*;
 use rdkafka::message::OwnedMessage;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 pub mod consume {
@@ -10,22 +9,20 @@ pub mod consume {
 
     #[derive(Message)]
     #[rtype(result = "()")]
-    pub struct AddRequest(pub TopicManagementKey);
+    pub struct AddRequest(pub Topic);
 
     #[derive(Message)]
     #[rtype(result = "()")]
-    pub struct CommitRequest(pub TopicManagementKey);
+    pub struct CommitRequest(pub OwnedMessage);
 
     #[derive(Message)]
     #[rtype(result = "()")]
-    pub struct StopRequest;
-
-    #[derive(Message)]
-    #[rtype(result = "()")]
-    pub struct SetupRequest(pub Recipient<process::NotifyRequest>);
+    pub struct RemoveRequest(pub Topic);
 }
 
 pub mod process {
+    use crate::msgproc::IMsgProcessor;
+
     use super::*;
 
     pub struct ProcessDescriptor {
@@ -39,16 +36,16 @@ pub mod process {
 
     #[derive(Message)]
     #[rtype(result = "()")]
-    pub struct AddRequest(pub Recipient<Msg>);
+    pub struct AddRequest(pub Arc<Mutex<Box<dyn IMsgProcessor>>>);
 
     #[derive(Message)]
     #[rtype(result = "()")]
-    pub struct DoneRequest(pub Result<ProcessDescriptor, MsgProcError>);
+    pub struct DoneRequest(pub Result<ProcessDescriptor, String>);
 
     #[derive(Message)]
     #[rtype(result = "()")]
     pub struct SetupRequest {
         pub commit_recipient: Recipient<consume::CommitRequest>,
-        pub stop_recipient: Recipient<consume::StopRequest>,
+        pub stop_recipient: Recipient<consume::RemoveRequest>,
     }
 }

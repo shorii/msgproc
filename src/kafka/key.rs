@@ -1,7 +1,11 @@
+pub type Topic = String;
+pub type Partition = i32;
+pub type Offset = i64;
+
 #[derive(Eq, PartialEq, Hash)]
 pub struct TopicManagementKey {
-    pub topic: String,
-    pub partition: i32,
+    pub topic: Topic,
+    pub partition: Partition,
 }
 
 macro_rules! key {

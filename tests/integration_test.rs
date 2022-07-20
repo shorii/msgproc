@@ -1,43 +1,39 @@
-use actix::prelude::*;
 use common::{create_msgproc_builder, create_producer};
 use msgproc::msg::Msg;
+use msgproc::msgproc::IMsgProcessor;
 use rdkafka::message::Message;
 use rdkafka::producer::BaseRecord;
-use regex::Regex;
 use std::time::Duration;
 
 mod common;
 
-struct Processor {
-    msgs: Vec<String>,
-}
+struct Processor1;
 
-impl Actor for Processor {
-    type Context = Context<Self>;
-}
-
-impl Handler<Msg> for Processor {
-    type Result = ();
-
-    fn handle(&mut self, msg: Msg, _ctx: &mut Self::Context) -> Self::Result {
-        let owned_message = msg.get_owned_message();
-        let payload = owned_message.payload_view::<str>().unwrap().unwrap();
-        println!("{}", payload.to_string());
-        self.msgs.push(payload.to_string());
+impl IMsgProcessor for Processor1 {
+    fn process(&mut self, msg: Msg) {
+        let message = msg.get_owned_message();
+        let body = message.payload_view::<str>().unwrap().unwrap();
+        println!(
+            "Processor1: (body: {}, topic: {}, partition: {})",
+            body,
+            message.topic(),
+            message.partition()
+        );
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "GetStoredMsgResponse")]
-struct GetStoredMsg;
+struct Processor2;
 
-#[derive(MessageResponse)]
-struct GetStoredMsgResponse(Vec<String>);
-
-impl Handler<GetStoredMsg> for Processor {
-    type Result = GetStoredMsgResponse;
-    fn handle(&mut self, _msg: GetStoredMsg, _ctx: &mut Self::Context) -> Self::Result {
-        GetStoredMsgResponse(self.msgs.clone())
+impl IMsgProcessor for Processor2 {
+    fn process(&mut self, msg: Msg) {
+        let message = msg.get_owned_message();
+        let body = message.payload_view::<str>().unwrap().unwrap();
+        println!(
+            "Processor2: (body: {}, topic: {}, partition: {})",
+            body,
+            message.topic(),
+            message.partition()
+        );
     }
 }
 
@@ -56,23 +52,15 @@ fn setup(test_name: &str) {
     }
 }
 
-#[actix::test]
-async fn integration_test() {
-    let test_name = "integration_test";
-    setup(test_name);
-    let arbiter = Arbiter::new();
-    let addr = Actor::start_in_arbiter(&arbiter.handle(), |_| Processor { msgs: vec![] });
-    let _msgproc = create_msgproc_builder(
-        &[addr.clone().recipient()],
-        &[Regex::new(&format!("^{}$", test_name)).unwrap()],
+#[test]
+fn integration_test() {
+    let test_name1 = "integration_test1";
+    let test_name2 = "integration_test2";
+    setup(test_name1);
+    setup(test_name2);
+    let msgproc = create_msgproc_builder(
+        vec![Box::new(Processor1), Box::new(Processor2)],
+        &[test_name1, test_name2],
     );
-    tokio::time::sleep(tokio::time::Duration::from_secs(20)).await;
-    let response = addr.send(GetStoredMsg).await.unwrap();
-    let msgs = response.0;
-    assert_eq!(msgs.len(), 5);
-    assert_eq!(msgs[0], "test_message: 0");
-    assert_eq!(msgs[1], "test_message: 1");
-    assert_eq!(msgs[2], "test_message: 2");
-    assert_eq!(msgs[3], "test_message: 3");
-    assert_eq!(msgs[4], "test_message: 4");
+    msgproc.run().unwrap();
 }

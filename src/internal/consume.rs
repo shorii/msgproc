@@ -93,8 +93,14 @@ impl ConsumeActor {
                         // channel is empty. continue to consume.
                     }
                 }
-                match consumer.consume(Duration::from_secs(5)) {
+                match consumer.consume(Duration::from_secs(0)) {
                     Some(Ok(msg)) => {
+                        let topic = msg.topic();
+                        let partition = msg.partition();
+                        if consumer.pause(topic, partition).is_err() {
+                            remove(&topic);
+                            break;
+                        }
                         recipient.do_send(process::NotifyRequest(msg.clone()));
                     }
                     Some(Err(e)) => {

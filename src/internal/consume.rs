@@ -7,7 +7,8 @@ use log::{error, info};
 use rdkafka::consumer::BaseConsumer;
 use rdkafka::message::{Message, OwnedMessage};
 use rdkafka::ClientConfig;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -42,11 +43,12 @@ impl ConsumeActor {
         }
     }
 
-    fn create_consumer(&self) -> BaseConsumer {
+    fn create_consumer(&self, topic: &str) -> BaseConsumer {
         let mut client_config = ClientConfig::new();
         for (key, value) in self.config.iter() {
             client_config.set(key, value);
         }
+        client_config.set("group.id", topic);
         client_config.set("enable.auto.commit", "false");
         client_config.set("auto.offset.reset", "earliest");
         client_config.create::<BaseConsumer>().unwrap()
@@ -66,7 +68,7 @@ impl ConsumeActor {
                     recipient.do_send(consume::RemoveRequest(topic.to_string()));
                 }
             };
-            let consumer = self.create_consumer();
+            let consumer = self.create_consumer(&topic);
             consumer.subscribe(&[&topic]).unwrap();
             let recipient = self.recipient.clone();
             thread::spawn(move || loop {
@@ -126,7 +128,21 @@ impl Actor for ConsumeActor {
             );
         }
         ctx.run_interval(Duration::from_secs(60), |actor, ctx| {
-            // TODO respawn TopicThread
+            let registered_topic_set: HashSet<String> =
+                HashSet::from_iter(actor.topics.iter().cloned());
+            let activated_topic_set: HashSet<String> =
+                HashSet::from_iter(actor.active_topic_threads.iter().map(|x| x.0).cloned());
+            for topic in registered_topic_set.difference(&activated_topic_set) {
+                let (s, r) = channel::bounded::<Signal>(0);
+                let thread = actor.spawn_consume(ctx, &topic, r);
+                actor.active_topic_threads.insert(
+                    topic.clone(),
+                    TopicThread {
+                        thread,
+                        signal_bus: s,
+                    },
+                );
+            }
         });
     }
 }

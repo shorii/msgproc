@@ -10,7 +10,7 @@ mod common;
 struct Processor1;
 
 impl IMsgProcessor for Processor1 {
-    fn process(&mut self, msg: Msg) {
+    fn process(&mut self, msg: &mut Msg) {
         let message = msg.get_owned_message();
         let body = message.payload_view::<str>().unwrap().unwrap();
         println!(
@@ -25,7 +25,7 @@ impl IMsgProcessor for Processor1 {
 struct Processor2;
 
 impl IMsgProcessor for Processor2 {
-    fn process(&mut self, msg: Msg) {
+    fn process(&mut self, msg: &mut Msg) {
         let message = msg.get_owned_message();
         let body = message.payload_view::<str>().unwrap().unwrap();
         println!(

@@ -1,6 +1,7 @@
 use actix::prelude::*;
 use rdkafka::message::Message;
 use std::collections::{HashMap, HashSet};
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use uuid::Uuid;
@@ -93,9 +94,14 @@ impl Handler<process::NotifyRequest> for ProcessActor {
                 let proc = proc.clone();
                 let owned_message = msg.0.clone();
                 thread::spawn(move || {
-                    let mut p = processor.lock().unwrap();
-                    let msg = Msg::new(proc, owned_message, id);
-                    p.process(msg);
+                    let mut msg = Msg::new(proc, owned_message, id);
+                    let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                        let mut p = processor.lock().unwrap();
+                        p.process(&mut msg);
+                    }));
+                    if result.is_err() {
+                        msg.mark_as_panic("Failed to process message");
+                    }
                 })
             };
             context.notify(*id, activated);
@@ -119,7 +125,7 @@ impl Handler<process::DoneRequest> for ProcessActor {
     type Result = ();
     fn handle(&mut self, msg: process::DoneRequest, _ctx: &mut Self::Context) -> Self::Result {
         match msg.0 {
-            Ok(descriptor) => {
+            process::ProcessStatus::SUCCESS(descriptor) => {
                 let process::ProcessDescriptor {
                     message,
                     processor_id,
@@ -134,12 +140,13 @@ impl Handler<process::DoneRequest> for ProcessActor {
                     }
                 }
             }
-            Err(topic) => {
+            process::ProcessStatus::ERROR(topic) => {
                 self.stop_recipient
                     .as_ref()
                     .unwrap()
                     .do_send(consume::RemoveRequest(topic));
             }
+            process::ProcessStatus::PANIC => System::current().stop(),
         };
     }
 }

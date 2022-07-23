@@ -30,6 +30,12 @@ pub mod process {
         pub processor_id: Uuid,
     }
 
+    pub enum ProcessStatus {
+        PANIC,
+        ERROR(String),
+        SUCCESS(ProcessDescriptor),
+    }
+
     #[derive(Message)]
     #[rtype(result = "()")]
     pub struct NotifyRequest(pub OwnedMessage);
@@ -40,7 +46,21 @@ pub mod process {
 
     #[derive(Message)]
     #[rtype(result = "()")]
-    pub struct DoneRequest(pub Result<ProcessDescriptor, String>);
+    pub struct DoneRequest(pub ProcessStatus);
+
+    impl DoneRequest {
+        pub fn success(descriptor: ProcessDescriptor) -> Self {
+            DoneRequest(ProcessStatus::SUCCESS(descriptor))
+        }
+
+        pub fn error(topic: &str) -> Self {
+            DoneRequest(ProcessStatus::ERROR(topic.to_string()))
+        }
+
+        pub fn panic() -> Self {
+            DoneRequest(ProcessStatus::PANIC)
+        }
+    }
 
     #[derive(Message)]
     #[rtype(result = "()")]

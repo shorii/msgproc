@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub trait IMsgProcessor: Send + Sync + 'static {
-    fn process(&mut self, msg: Msg);
+    fn process(&mut self, msg: &mut Msg);
 }
 
 pub struct MsgProcBuilder {

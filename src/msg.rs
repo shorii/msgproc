@@ -17,6 +17,7 @@ pub struct Msg {
     msg: OwnedMessage,
     processor_id: Uuid,
     error_msg: RefCell<Option<String>>,
+    panic_msg: RefCell<Option<String>>,
 }
 
 impl Msg {
@@ -30,6 +31,7 @@ impl Msg {
             msg,
             processor_id,
             error_msg: RefCell::new(None),
+            panic_msg: RefCell::new(None),
         }
     }
 
@@ -43,6 +45,11 @@ impl Msg {
         *e = Some(error_msg.to_string());
     }
 
+    pub(crate) fn mark_as_panic(&self, panic_msg: &str) {
+        let mut p = self.panic_msg.borrow_mut();
+        *p = Some(panic_msg.to_string());
+    }
+
     /// kafkaから[crate::consumer::IConsumer::consume]されたメッセージを取得する。
     pub fn get_owned_message(&self) -> OwnedMessage {
         self.msg.clone()
@@ -51,18 +58,22 @@ impl Msg {
 
 impl Drop for Msg {
     fn drop(&mut self) {
+        if let Some(_panic_msg) = self.panic_msg.borrow().clone() {
+            self.proc.do_send(process::DoneRequest::panic());
+            return;
+        }
         match self.error_msg.borrow().clone() {
             Some(_error_msg) => {
                 // TODO log error message
                 self.proc
-                    .do_send(process::DoneRequest(Err(self.msg.topic().to_string())));
+                    .do_send(process::DoneRequest::error(self.msg.topic()));
             }
             None => {
                 self.proc
-                    .do_send(process::DoneRequest(Ok(process::ProcessDescriptor {
+                    .do_send(process::DoneRequest::success(process::ProcessDescriptor {
                         message: self.msg.clone(),
                         processor_id: self.processor_id,
-                    })));
+                    }));
             }
         }
     }

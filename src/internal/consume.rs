@@ -1,4 +1,5 @@
 use crate::internal::msg::{consume, process};
+use crate::internal::utils::RecipientExt;
 use crate::kafka::consumer::IConsumer;
 use crate::kafka::key::Topic;
 use actix::prelude::*;
@@ -65,7 +66,9 @@ impl ConsumeActor {
             let remove = {
                 let recipient = ctx.address().recipient();
                 move |topic: &str| {
-                    recipient.do_send(consume::RemoveRequest(topic.to_string()));
+                    recipient
+                        .send_safety(consume::RemoveRequest(topic.to_string()))
+                        .unwrap();
                 }
             };
             let consumer = self.create_consumer(&topic);
@@ -81,11 +84,11 @@ impl ConsumeActor {
                         let partition = message.partition();
                         let offset = message.offset();
                         if consumer.commit(topic, partition, offset).is_err() {
-                            remove(&topic);
+                            remove(topic);
                             break;
                         }
                         if consumer.resume(topic, partition).is_err() {
-                            remove(&topic);
+                            remove(topic);
                             break;
                         }
                     }
@@ -98,10 +101,14 @@ impl ConsumeActor {
                         let topic = msg.topic();
                         let partition = msg.partition();
                         if consumer.pause(topic, partition).is_err() {
-                            remove(&topic);
+                            remove(topic);
                             break;
                         }
-                        recipient.do_send(process::NotifyRequest(msg.clone()));
+                        let result = recipient.send_safety(process::NotifyRequest(msg.clone()));
+                        if result.is_err() {
+                            remove(topic);
+                            break;
+                        }
                     }
                     Some(Err(e)) => {
                         info!("KafkaError occurred (Error: {})", e);
@@ -140,7 +147,7 @@ impl Actor for ConsumeActor {
                 HashSet::from_iter(actor.active_topic_threads.iter().map(|x| x.0).cloned());
             for topic in registered_topic_set.difference(&activated_topic_set) {
                 let (s, r) = channel::bounded::<Signal>(0);
-                let thread = actor.spawn_consume(ctx, &topic, r);
+                let thread = actor.spawn_consume(ctx, topic, r);
                 actor.active_topic_threads.insert(
                     topic.clone(),
                     TopicThread {
@@ -206,7 +213,7 @@ impl Handler<consume::RemoveRequest> for ConsumeActor {
                 topic
             );
             // When `send` returns Err, thread has already been finished.
-            if let Ok(_) = att.signal_bus.send(Signal::END) {
+            if att.signal_bus.send(Signal::END).is_ok() {
                 if att.thread.join().is_err() {
                     error!("Panic occurred and shutdown ConsumeActor");
                     let active_topic_threads = std::mem::take(&mut self.active_topic_threads);

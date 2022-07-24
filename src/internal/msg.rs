@@ -7,15 +7,15 @@ use uuid::Uuid;
 pub mod consume {
     use super::*;
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct AddRequest(pub Topic);
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct CommitRequest(pub OwnedMessage);
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct RemoveRequest(pub Topic);
 }
@@ -25,44 +25,46 @@ pub mod process {
 
     use super::*;
 
+    #[derive(Clone)]
     pub struct ProcessDescriptor {
         pub message: OwnedMessage,
         pub processor_id: Uuid,
     }
 
+    #[derive(Clone)]
     pub enum ProcessStatus {
-        PANIC,
-        ERROR(String),
-        SUCCESS(ProcessDescriptor),
+        Panic,
+        Error(String),
+        Success(ProcessDescriptor),
     }
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct NotifyRequest(pub OwnedMessage);
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct AddRequest(pub Arc<Mutex<Box<dyn IMsgProcessor>>>);
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct DoneRequest(pub ProcessStatus);
 
     impl DoneRequest {
         pub fn success(descriptor: ProcessDescriptor) -> Self {
-            DoneRequest(ProcessStatus::SUCCESS(descriptor))
+            DoneRequest(ProcessStatus::Success(descriptor))
         }
 
         pub fn error(topic: &str) -> Self {
-            DoneRequest(ProcessStatus::ERROR(topic.to_string()))
+            DoneRequest(ProcessStatus::Error(topic.to_string()))
         }
 
         pub fn panic() -> Self {
-            DoneRequest(ProcessStatus::PANIC)
+            DoneRequest(ProcessStatus::Panic)
         }
     }
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct SetupRequest {
         pub commit_recipient: Recipient<consume::CommitRequest>,

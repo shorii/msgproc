@@ -66,7 +66,6 @@ impl MsgProc {
 
         let consume_arbiter = Arbiter::new();
         let consume_addr = Actor::start_in_arbiter(&consume_arbiter.handle(), {
-            let config = config.clone();
             let recipient = process_addr.clone().recipient();
             move |_: &mut Context<ConsumeActor>| ConsumeActor::new(config, topics, recipient)
         });

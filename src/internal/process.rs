@@ -7,6 +7,7 @@ use std::thread::{self, JoinHandle};
 use uuid::Uuid;
 
 use crate::internal::msg::{consume, process};
+use crate::internal::utils::RecipientExt;
 use crate::kafka::key::{key, TopicManagementKey};
 use crate::msg::Msg;
 use crate::msgproc::IMsgProcessor;
@@ -125,7 +126,7 @@ impl Handler<process::DoneRequest> for ProcessActor {
     type Result = ();
     fn handle(&mut self, msg: process::DoneRequest, _ctx: &mut Self::Context) -> Self::Result {
         match msg.0 {
-            process::ProcessStatus::SUCCESS(descriptor) => {
+            process::ProcessStatus::Success(descriptor) => {
                 let process::ProcessDescriptor {
                     message,
                     processor_id,
@@ -133,20 +134,28 @@ impl Handler<process::DoneRequest> for ProcessActor {
                 let context = self.contexts.get_mut(&key!(message));
                 if let Some(context) = context {
                     if context.done(processor_id) {
-                        self.commit_recipient
+                        let result = self
+                            .commit_recipient
                             .as_ref()
                             .unwrap()
-                            .do_send(consume::CommitRequest(message));
+                            .send_safety(consume::CommitRequest(message));
+                        if result.is_err() {
+                            System::current().stop();
+                        }
                     }
                 }
             }
-            process::ProcessStatus::ERROR(topic) => {
-                self.stop_recipient
+            process::ProcessStatus::Error(topic) => {
+                let result = self
+                    .stop_recipient
                     .as_ref()
                     .unwrap()
-                    .do_send(consume::RemoveRequest(topic));
+                    .send_safety(consume::RemoveRequest(topic));
+                if result.is_err() {
+                    System::current().stop();
+                }
             }
-            process::ProcessStatus::PANIC => System::current().stop(),
+            process::ProcessStatus::Panic => System::current().stop(),
         };
     }
 }

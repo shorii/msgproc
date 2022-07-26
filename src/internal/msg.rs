@@ -1,8 +1,10 @@
-use crate::kafka::key::Topic;
+use crate::kafka::alias::Topic;
 use actix::prelude::*;
 use rdkafka::message::OwnedMessage;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
+
+pub type ProcessorId = Uuid;
 
 pub mod consume {
     use super::*;
@@ -28,13 +30,13 @@ pub mod process {
     #[derive(Clone)]
     pub struct ProcessDescriptor {
         pub message: OwnedMessage,
-        pub processor_id: Uuid,
+        pub processor_id: ProcessorId,
     }
 
     #[derive(Clone)]
     pub enum ProcessStatus {
         Panic,
-        Error(String),
+        Error(Topic),
         Success(ProcessDescriptor),
     }
 

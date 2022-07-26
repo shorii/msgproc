@@ -1,9 +1,9 @@
 use crate::internal::msg::process;
+use crate::internal::msg::ProcessorId;
 use actix::prelude::*;
 use rdkafka::message::Message;
 use rdkafka::message::OwnedMessage;
 use std::cell::RefCell;
-use uuid::Uuid;
 
 /// ユーザ定義の[Handler]で処理するデータ型
 ///
@@ -15,7 +15,7 @@ use uuid::Uuid;
 pub struct Msg {
     proc: Recipient<process::DoneRequest>,
     msg: OwnedMessage,
-    processor_id: Uuid,
+    processor_id: ProcessorId,
     error_msg: RefCell<Option<String>>,
     panic_msg: RefCell<Option<String>>,
 }
@@ -24,7 +24,7 @@ impl Msg {
     pub(crate) fn new(
         proc: Recipient<process::DoneRequest>,
         msg: OwnedMessage,
-        processor_id: Uuid,
+        processor_id: ProcessorId,
     ) -> Self {
         Self {
             proc,

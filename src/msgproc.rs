@@ -1,6 +1,7 @@
 use crate::internal::consume::ConsumeActor;
 use crate::internal::msg::process;
 use crate::internal::process::ProcessActor;
+use crate::kafka::alias::Topic;
 use crate::msg::Msg;
 use actix::prelude::*;
 use std::collections::HashMap;
@@ -12,8 +13,14 @@ pub trait IMsgProcessor: Send + Sync + 'static {
 
 pub struct MsgProcBuilder {
     config: Option<HashMap<String, String>>,
-    topics: Vec<String>,
+    topics: Vec<Topic>,
     processors: Vec<Box<dyn IMsgProcessor>>,
+}
+
+impl Default for MsgProcBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MsgProcBuilder {
@@ -30,8 +37,13 @@ impl MsgProcBuilder {
         self
     }
 
-    pub fn topics(&mut self, topics: &[&str]) -> &mut Self {
-        self.topics = topics.iter().map(|t| t.to_string()).collect::<Vec<_>>();
+    pub fn topics<T, U>(&mut self, topics: T) -> &mut Self
+    where
+        T: Into<Vec<U>>,
+        U: Into<String>,
+    {
+        let into_vec: Vec<U> = topics.into();
+        self.topics = into_vec.into_iter().map(|f| f.into()).collect::<Vec<_>>();
         self
     }
 
@@ -52,7 +64,7 @@ pub struct MsgProc {
 }
 
 impl MsgProc {
-    pub fn new(
+    fn new(
         config: HashMap<String, String>,
         topics: Vec<String>,
         processors: Vec<Box<dyn IMsgProcessor>>,

@@ -1,46 +1,46 @@
 use actix::prelude::*;
-use rdkafka::message::Message;
+use rdkafka::message::{Message, OwnedMessage};
 use std::collections::{HashMap, HashSet};
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use uuid::Uuid;
 
-use crate::internal::msg::{consume, process};
+use crate::internal::msg::{consume, process, ProcessorId};
 use crate::internal::utils::RecipientExt;
-use crate::kafka::key::{key, TopicManagementKey};
+use crate::kafka::alias::{Partition, Topic};
 use crate::msg::Msg;
 use crate::msgproc::IMsgProcessor;
 
 struct Processor {
-    id: Uuid,
+    id: ProcessorId,
     proc: Recipient<process::DoneRequest>,
     processor: Arc<Mutex<Box<dyn IMsgProcessor>>>,
 }
 
 struct TopicManagementProcessContext {
-    processor_ids: HashSet<Uuid>,
-    notified: HashSet<Uuid>,
-    done: HashSet<Uuid>,
-    activated: HashMap<Uuid, JoinHandle<()>>,
+    processor_ids: HashSet<ProcessorId>,
+    notified: HashSet<ProcessorId>,
+    done: HashSet<ProcessorId>,
+    activated: HashMap<ProcessorId, JoinHandle<()>>,
 }
 
 impl TopicManagementProcessContext {
-    fn new(processor_ids: &[Uuid]) -> Self {
+    fn new(processor_ids: &[ProcessorId]) -> Self {
         Self {
-            processor_ids: processor_ids.iter().cloned().collect(),
-            notified: HashSet::<Uuid>::new(),
-            done: HashSet::<Uuid>::new(),
+            processor_ids: HashSet::from_iter(processor_ids.to_vec()),
+            notified: HashSet::<ProcessorId>::new(),
+            done: HashSet::<ProcessorId>::new(),
             activated: HashMap::new(),
         }
     }
 
-    fn notify(&mut self, processor_id: Uuid, activated: JoinHandle<()>) {
+    fn notify(&mut self, processor_id: ProcessorId, activated: JoinHandle<()>) {
         self.notified.insert(processor_id);
         self.activated.insert(processor_id, activated);
     }
 
-    fn done(&mut self, processor_id: Uuid) -> bool {
+    fn done(&mut self, processor_id: ProcessorId) -> bool {
         self.done.insert(processor_id);
         if self.notified == self.done && self.done == self.processor_ids {
             for id in self.done.iter() {
@@ -55,8 +55,22 @@ impl TopicManagementProcessContext {
     }
 }
 
+#[derive(Eq, PartialEq, Hash)]
+struct TopicManagementProcessContextKey {
+    pub topic: Topic,
+    pub partition: Partition,
+}
+
+impl TopicManagementProcessContextKey {
+    fn new(msg: OwnedMessage) -> Self {
+        let topic = msg.topic().to_string();
+        let partition = msg.partition();
+        Self { topic, partition }
+    }
+}
+
 pub struct ProcessActor {
-    contexts: HashMap<TopicManagementKey, TopicManagementProcessContext>,
+    contexts: HashMap<TopicManagementProcessContextKey, TopicManagementProcessContext>,
     processors: Vec<Processor>,
     commit_recipient: Option<Recipient<consume::CommitRequest>>,
     stop_recipient: Option<Recipient<consume::RemoveRequest>>,
@@ -107,7 +121,8 @@ impl Handler<process::NotifyRequest> for ProcessActor {
             };
             context.notify(*id, activated);
         }
-        self.contexts.insert(key!(msg.0), context);
+        self.contexts
+            .insert(TopicManagementProcessContextKey::new(msg.0), context);
     }
 }
 
@@ -131,7 +146,8 @@ impl Handler<process::DoneRequest> for ProcessActor {
                     message,
                     processor_id,
                 } = descriptor;
-                let context = self.contexts.get_mut(&key!(message));
+                let key = TopicManagementProcessContextKey::new(message.clone());
+                let context = self.contexts.get_mut(&key);
                 if let Some(context) = context {
                     if context.done(processor_id) {
                         let result = self

@@ -1,2 +1,2 @@
+pub mod alias;
 pub mod consumer;
-pub mod key;

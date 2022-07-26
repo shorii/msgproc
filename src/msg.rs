@@ -1,9 +1,9 @@
-use crate::error::MsgProcError;
 use crate::internal::msg::process;
+use crate::internal::msg::ProcessorId;
 use actix::prelude::*;
+use rdkafka::message::Message;
 use rdkafka::message::OwnedMessage;
 use std::cell::RefCell;
-use uuid::Uuid;
 
 /// ユーザ定義の[Handler]で処理するデータ型
 ///
@@ -15,21 +15,23 @@ use uuid::Uuid;
 pub struct Msg {
     proc: Recipient<process::DoneRequest>,
     msg: OwnedMessage,
-    handler_id: Uuid,
+    processor_id: ProcessorId,
     error_msg: RefCell<Option<String>>,
+    panic_msg: RefCell<Option<String>>,
 }
 
 impl Msg {
     pub(crate) fn new(
         proc: Recipient<process::DoneRequest>,
         msg: OwnedMessage,
-        handler_id: Uuid,
+        processor_id: ProcessorId,
     ) -> Self {
         Self {
             proc,
             msg,
-            handler_id,
+            processor_id,
             error_msg: RefCell::new(None),
+            panic_msg: RefCell::new(None),
         }
     }
 
@@ -43,6 +45,11 @@ impl Msg {
         *e = Some(error_msg.to_string());
     }
 
+    pub(crate) fn mark_as_panic(&self, panic_msg: &str) {
+        let mut p = self.panic_msg.borrow_mut();
+        *p = Some(panic_msg.to_string());
+    }
+
     /// kafkaから[crate::consumer::IConsumer::consume]されたメッセージを取得する。
     pub fn get_owned_message(&self) -> OwnedMessage {
         self.msg.clone()
@@ -51,55 +58,23 @@ impl Msg {
 
 impl Drop for Msg {
     fn drop(&mut self) {
+        if let Some(_panic_msg) = self.panic_msg.borrow().clone() {
+            self.proc.do_send(process::DoneRequest::panic());
+            return;
+        }
         match self.error_msg.borrow().clone() {
-            Some(error_msg) => {
+            Some(_error_msg) => {
+                // TODO log error message
                 self.proc
-                    .do_send(process::DoneRequest(Err(MsgProcError::HandleError(
-                        error_msg,
-                    ))));
+                    .do_send(process::DoneRequest::error(self.msg.topic()));
             }
             None => {
                 self.proc
-                    .do_send(process::DoneRequest(Ok(process::ProcessDescriptor {
+                    .do_send(process::DoneRequest::success(process::ProcessDescriptor {
                         message: self.msg.clone(),
-                        processor_id: self.handler_id,
-                    })));
+                        processor_id: self.processor_id,
+                    }));
             }
         }
     }
 }
-
-//impl Drop for Msg {
-//    fn drop(&mut self) {
-//        match self.error_msg.borrow().clone() {
-//            Some(error_msg) => {
-//                self.proc
-//                    .do_send(MsgProcResult(Err(MsgProcError::HandleError(error_msg))));
-//            }
-//            None => {
-//                self.proc.do_send(MsgProcResult(Ok(MsgProcessorDescriptor {
-//                    message: self.msg.clone(),
-//                    processor_id: self.handler_id,
-//                })));
-//            }
-//        }
-//    }
-//}
-
-//#[derive(Message)]
-//#[rtype(result = "()")]
-//pub struct MsgProcessor(pub Recipient<Msg>);
-//
-//#[derive(Message)]
-//#[rtype(result = "()")]
-//pub(crate) struct InnerMsg(pub OwnedMessage);
-//
-//pub(crate) struct MsgProcessorDescriptor {
-//    pub message: OwnedMessage,
-//    pub processor_id: Uuid,
-//}
-//
-//#[derive(Message)]
-//#[rtype(result = "()")]
-//pub(crate) struct MsgProcResult(pub Result<MsgProcessorDescriptor, MsgProcError>);
-//

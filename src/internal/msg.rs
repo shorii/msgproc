@@ -1,54 +1,75 @@
-use crate::error::MsgProcError;
-use crate::kafka::key::TopicManagementKey;
-use crate::msg::Msg;
+use crate::kafka::alias::Topic;
 use actix::prelude::*;
 use rdkafka::message::OwnedMessage;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
+
+pub type ProcessorId = Uuid;
 
 pub mod consume {
     use super::*;
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
-    pub struct AddRequest(pub TopicManagementKey);
+    pub struct AddRequest(pub Topic);
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
-    pub struct CommitRequest(pub TopicManagementKey);
+    pub struct CommitRequest(pub OwnedMessage);
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
-    pub struct StopRequest;
-
-    #[derive(Message)]
-    #[rtype(result = "()")]
-    pub struct SetupRequest(pub Recipient<process::NotifyRequest>);
+    pub struct RemoveRequest(pub Topic);
 }
 
 pub mod process {
+    use crate::msgproc::IMsgProcessor;
+
     use super::*;
 
+    #[derive(Clone)]
     pub struct ProcessDescriptor {
         pub message: OwnedMessage,
-        pub processor_id: Uuid,
+        pub processor_id: ProcessorId,
     }
 
-    #[derive(Message)]
+    #[derive(Clone)]
+    pub enum ProcessStatus {
+        Panic,
+        Error(Topic),
+        Success(ProcessDescriptor),
+    }
+
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct NotifyRequest(pub OwnedMessage);
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
-    pub struct AddRequest(pub Recipient<Msg>);
+    pub struct AddRequest(pub Arc<Mutex<Box<dyn IMsgProcessor>>>);
 
-    #[derive(Message)]
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
-    pub struct DoneRequest(pub Result<ProcessDescriptor, MsgProcError>);
+    pub struct DoneRequest(pub ProcessStatus);
 
-    #[derive(Message)]
+    impl DoneRequest {
+        pub fn success(descriptor: ProcessDescriptor) -> Self {
+            DoneRequest(ProcessStatus::Success(descriptor))
+        }
+
+        pub fn error(topic: &str) -> Self {
+            DoneRequest(ProcessStatus::Error(topic.to_string()))
+        }
+
+        pub fn panic() -> Self {
+            DoneRequest(ProcessStatus::Panic)
+        }
+    }
+
+    #[derive(Message, Clone)]
     #[rtype(result = "()")]
     pub struct SetupRequest {
         pub commit_recipient: Recipient<consume::CommitRequest>,
-        pub stop_recipient: Recipient<consume::StopRequest>,
+        pub stop_recipient: Recipient<consume::RemoveRequest>,
     }
 }

@@ -1,107 +1,89 @@
 use crate::internal::consume::ConsumeActor;
 use crate::internal::msg::process;
 use crate::internal::process::ProcessActor;
-use crate::kafka::consumer::IConsumer;
+use crate::kafka::alias::Topic;
 use crate::msg::Msg;
 use actix::prelude::*;
-use num_cpus;
-use rdkafka::consumer::BaseConsumer;
-use rdkafka::ClientConfig;
-use regex::Regex;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+
+pub trait IMsgProcessor: Send + Sync + 'static {
+    fn process(&mut self, msg: &mut Msg);
+}
 
 pub struct MsgProcBuilder {
-    consumer: Option<Arc<Box<dyn IConsumer>>>,
-    parallels: usize,
-    processors: Vec<Recipient<Msg>>,
+    config: Option<HashMap<String, String>>,
+    topics: Vec<Topic>,
+    processors: Vec<Box<dyn IMsgProcessor>>,
+}
+
+impl Default for MsgProcBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MsgProcBuilder {
     pub fn new() -> Self {
         Self {
-            consumer: None,
-            parallels: 1,
+            config: None,
+            topics: vec![],
             processors: vec![],
         }
     }
 
-    pub fn consumer_config<K, V>(&mut self, config: HashMap<K, V>, topics: &[Regex]) -> &mut Self
+    pub fn config(mut self, config: HashMap<String, String>) -> Self {
+        self.config = Some(config);
+        self
+    }
+
+    pub fn topics<T, U>(mut self, topics: T) -> Self
     where
-        K: Into<String>,
-        V: Into<String>,
+        T: Into<Vec<U>>,
+        U: Into<String>,
     {
-        let mut client_config = ClientConfig::new();
-        for (key, value) in config.into_iter() {
-            client_config.set::<K, V>(key, value);
-        }
-        client_config.set("enable.auto.commit", "false");
-        let consumer = client_config.create::<BaseConsumer>().unwrap();
-        let o_topics = consumer.get_topics(Duration::from_secs(5)).unwrap();
-        let f_topics = o_topics
-            .iter()
-            .filter(|s| {
-                for reg in topics.iter() {
-                    if reg.is_match(s) {
-                        return true;
-                    }
-                }
-                false
-            })
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>();
-        consumer.subscribe(&f_topics).unwrap();
-        self.consumer = Some(Arc::new(Box::new(consumer)));
+        let into_vec: Vec<U> = topics.into();
+        self.topics = into_vec.into_iter().map(|f| f.into()).collect::<Vec<_>>();
         self
     }
 
-    pub fn parallels(&mut self, parallels: usize) -> &mut Self {
-        let p_count = core::cmp::max(parallels, self.parallels);
-        self.parallels = p_count;
-        self
-    }
-
-    pub fn processor(&mut self, processor: Recipient<Msg>) -> &mut Self {
+    pub fn processor(mut self, processor: Box<dyn IMsgProcessor>) -> Self {
         self.processors.push(processor);
         self
     }
 
-    pub fn build(&mut self) -> MsgProc {
-        MsgProc::invoke(
-            Arc::clone(&self.consumer.as_ref().unwrap()),
-            self.parallels,
-            &self.processors,
-        )
+    pub fn build(self) -> MsgProc {
+        MsgProc::new(self.config.unwrap(), self.topics, self.processors)
     }
 }
 
 pub struct MsgProc {
     _p_addr: Addr<ProcessActor>,
     _c_addr: Addr<ConsumeActor>,
+    system_runner: SystemRunner,
 }
 
 impl MsgProc {
-    pub fn invoke(
-        consumer: Arc<Box<dyn IConsumer>>,
-        parallels: usize,
-        processors: &[Recipient<Msg>],
+    fn new(
+        config: HashMap<String, String>,
+        topics: Vec<String>,
+        processors: Vec<Box<dyn IMsgProcessor>>,
     ) -> Self {
+        let system_runner = System::new();
         let process_arbiter = Arbiter::new();
         let process_addr = Actor::start_in_arbiter(
             &process_arbiter.handle(),
             move |_: &mut Context<ProcessActor>| ProcessActor::new(),
         );
 
-        let p_count = core::cmp::min(parallels, num_cpus::get());
         let consume_arbiter = Arbiter::new();
         let consume_addr = Actor::start_in_arbiter(&consume_arbiter.handle(), {
             let recipient = process_addr.clone().recipient();
-            move |_: &mut Context<ConsumeActor>| ConsumeActor::new(consumer, p_count, recipient)
+            move |_: &mut Context<ConsumeActor>| ConsumeActor::new(config, topics, recipient)
         });
 
         for processor in processors {
-            process_addr.do_send(process::AddRequest(processor.clone()))
+            process_addr.do_send(process::AddRequest(Arc::new(Mutex::new(processor))));
         }
 
         process_addr.do_send(process::SetupRequest {
@@ -112,6 +94,11 @@ impl MsgProc {
         MsgProc {
             _p_addr: process_addr,
             _c_addr: consume_addr,
+            system_runner,
         }
+    }
+
+    pub fn run(self) -> std::io::Result<()> {
+        self.system_runner.run()
     }
 }

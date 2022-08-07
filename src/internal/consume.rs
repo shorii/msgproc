@@ -1,145 +1,121 @@
 use crate::internal::msg::{consume, process};
-use crate::kafka::consumer::IConsumer;
-use crate::kafka::key::{key, TopicManagementKey};
+use crate::internal::utils::RecipientExt;
+use crate::kafka::alias::Topic;
+use crate::kafka::consumer::{BaseConsumer, IConsumer};
 use actix::prelude::*;
 use crossbeam::channel;
-use rdkafka::message::Message;
-use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, RwLock};
+use log::{error, info};
+use rdkafka::message::{Message, OwnedMessage};
+use rdkafka::ClientConfig;
+use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-enum Signal {
-    END,
-    COMMIT(TopicManagementKey),
+enum ConsumeSignal {
+    End,
+    Commit(OwnedMessage),
 }
 
-pub struct TopicOffsetManagementContext {
-    offset: Option<i64>,
+pub struct TopicThread {
+    thread: JoinHandle<()>,
+    signal_bus: channel::Sender<ConsumeSignal>,
 }
 
 pub struct ConsumeActor {
-    threads: Vec<JoinHandle<()>>,
-    offsets: Arc<RwLock<HashMap<TopicManagementKey, TopicOffsetManagementContext>>>,
-    consumer: Arc<Box<dyn IConsumer>>,
+    config: HashMap<String, String>,
+    topics: Vec<Topic>,
     recipient: Recipient<process::NotifyRequest>,
-    parallels: usize,
-    signal_bus: Option<channel::Sender<Signal>>,
-    stopping: AtomicBool,
+    active_topic_threads: HashMap<Topic, TopicThread>,
 }
 
 impl ConsumeActor {
     pub fn new(
-        consumer: Arc<Box<dyn IConsumer>>,
-        parallels: usize,
+        config: HashMap<String, String>,
+        topics: Vec<String>,
         recipient: Recipient<process::NotifyRequest>,
     ) -> Self {
         Self {
-            threads: vec![],
-            offsets: Arc::new(RwLock::new(HashMap::new())),
-            consumer: consumer,
-            recipient: recipient,
-            parallels,
-            signal_bus: None,
-            stopping: AtomicBool::new(false),
+            config,
+            topics,
+            recipient,
+            active_topic_threads: HashMap::new(),
         }
+    }
+
+    fn create_consumer(&self, topic: &str) -> BaseConsumer {
+        let mut client_config = ClientConfig::new();
+        for (key, value) in self.config.iter() {
+            client_config.set(key, value);
+        }
+        client_config.set("group.id", topic);
+        client_config.set("enable.auto.commit", "false");
+        client_config.set("auto.offset.reset", "earliest");
+        client_config.create::<BaseConsumer>().unwrap()
     }
 
     fn spawn_consume(
         &mut self,
         ctx: &mut Context<ConsumeActor>,
-        signal_bus: channel::Receiver<Signal>,
+        topic: &str,
+        signal_bus: channel::Receiver<ConsumeSignal>,
     ) -> JoinHandle<()> {
-        let consume_thread = {
-            let stop = {
-                let sender = self.signal_bus.as_ref().unwrap().clone();
-                let recipient = ctx.address().recipient();
-                move || {
-                    sender
-                        .send(Signal::END)
-                        .expect("Failed to send Signal::END");
-                    recipient.do_send(consume::StopRequest);
-                }
-            };
-            let offsets = Arc::clone(&self.offsets);
-            let consumer = Arc::clone(&self.consumer);
-            let recipient = self.recipient.clone();
-            thread::spawn(move || loop {
-                match signal_bus.try_recv() {
-                    Ok(Signal::END) => {
-                        break;
-                    }
-                    Ok(Signal::COMMIT(key)) => {
-                        let acquired = offsets.write();
-                        if acquired.is_err() {
-                            stop();
-                            break;
-                        }
-                        let context = acquired.as_ref().unwrap().get(&key);
-                        if context.is_none() {
-                            stop();
-                            break;
-                        }
-                        let TopicOffsetManagementContext { mut offset } = context.unwrap();
-                        match offset.take() {
-                            Some(offset) => {
-                                let topic = key.topic;
-                                let partition = key.partition;
-                                if consumer.commit(&topic, partition, offset).is_err() {
-                                    stop();
-                                    break;
-                                }
-                                if consumer.resume(&topic, partition).is_err() {
-                                    stop();
-                                    break;
-                                }
-                            }
-                            None => {
-                                // committed by other thread. continue to consume.
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        // channel is empty. continue to consume.
-                    }
-                }
-                match consumer.consume(Duration::from_secs(5)) {
-                    Some(Ok(msg)) => {
-                        recipient.do_send(process::NotifyRequest(msg.clone()));
-                        let topic = msg.topic();
-                        let partition = msg.partition();
-                        let offset = msg.offset();
-                        if consumer.pause(topic, partition).is_err() {
-                            // TODO log error message
-                            stop();
-                            break;
-                        }
-                        let acquired = offsets.write();
-                        if acquired.is_err() {
-                            stop();
-                            break;
-                        }
-                        let mut context = acquired.unwrap();
-                        context.insert(
-                            key!(msg),
-                            TopicOffsetManagementContext {
-                                offset: Some(offset),
-                            },
-                        );
-                    }
-                    Some(Err(_)) => {
-                        // TODO log error message
-                        stop();
-                        break;
-                    }
-                    None => {
-                        // topic is empty. continue to consume.
-                    }
-                }
-            })
+        let topic = topic.to_string();
+        let remove = {
+            let recipient = ctx.address().recipient();
+            move |topic: &str| {
+                recipient
+                    .send_safety(consume::RemoveRequest(topic.to_string()))
+                    .unwrap();
+            }
         };
-        consume_thread
+        let consumer = self.create_consumer(&topic);
+        consumer.subscribe(&[&topic]).unwrap();
+        let recipient = self.recipient.clone();
+        thread::spawn(move || loop {
+            match signal_bus.try_recv() {
+                Ok(ConsumeSignal::End) => {
+                    break;
+                }
+                Ok(ConsumeSignal::Commit(message)) => {
+                    let partition = message.partition();
+                    let offset = message.offset();
+                    if consumer.commit(&topic, partition, offset).is_err() {
+                        remove(&topic);
+                        break;
+                    }
+                    if consumer.resume(&topic, partition).is_err() {
+                        remove(&topic);
+                        break;
+                    }
+                }
+                Err(_) => {
+                    // channel is empty. continue to consume.
+                }
+            }
+            match consumer.consume(Duration::from_secs(0)) {
+                Some(Ok(msg)) => {
+                    let partition = msg.partition();
+                    if consumer.pause(&topic, partition).is_err() {
+                        remove(&topic);
+                        break;
+                    }
+                    let result = recipient.send_safety(process::NotifyRequest(msg.clone()));
+                    if result.is_err() {
+                        remove(&topic);
+                        break;
+                    }
+                }
+                Some(Err(e)) => {
+                    info!("KafkaError occurred (Error: {})", e);
+                    remove(&topic);
+                    break;
+                }
+                None => {
+                    // topic is empty. continue to consume.
+                }
+            }
+        })
     }
 }
 
@@ -147,61 +123,173 @@ impl Actor for ConsumeActor {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let (s, r) = channel::bounded::<Signal>(0);
-        self.signal_bus = Some(s.clone());
-        for _ in 0..self.parallels {
-            let thread = self.spawn_consume(ctx, r.clone());
-            self.threads.push(thread);
+        for topic in self.topics.clone().into_iter() {
+            let (s, r) = channel::bounded::<ConsumeSignal>(0);
+            let thread = self.spawn_consume(ctx, &topic, r);
+            self.active_topic_threads.insert(
+                topic,
+                TopicThread {
+                    thread,
+                    signal_bus: s,
+                },
+            );
         }
+        ctx.run_interval(Duration::from_secs(60), |actor, ctx| {
+            let registered_topic_set: HashSet<String> =
+                HashSet::from_iter(actor.topics.iter().cloned());
+            let activated_topic_set: HashSet<String> =
+                HashSet::from_iter(actor.active_topic_threads.iter().map(|x| x.0).cloned());
+            for topic in registered_topic_set.difference(&activated_topic_set) {
+                let (s, r) = channel::bounded::<ConsumeSignal>(0);
+                let thread = actor.spawn_consume(ctx, topic, r);
+                actor.active_topic_threads.insert(
+                    topic.to_string(),
+                    TopicThread {
+                        thread,
+                        signal_bus: s,
+                    },
+                );
+            }
+        });
     }
 }
 
 impl Handler<consume::AddRequest> for ConsumeActor {
     type Result = ();
-    fn handle(&mut self, msg: consume::AddRequest, _ctx: &mut Self::Context) -> Self::Result {
-        let mut offsets = self.offsets.write().unwrap();
-        offsets.insert(msg.0, TopicOffsetManagementContext { offset: None });
+    fn handle(&mut self, msg: consume::AddRequest, ctx: &mut Self::Context) -> Self::Result {
+        let topic = msg.0;
+        if self.topics.contains(&topic) {
+            return;
+        }
+        let (s, r) = channel::bounded::<ConsumeSignal>(0);
+        let thread = self.spawn_consume(ctx, &topic, r);
+        self.active_topic_threads.insert(
+            topic,
+            TopicThread {
+                thread,
+                signal_bus: s,
+            },
+        );
     }
 }
 
 impl Handler<consume::CommitRequest> for ConsumeActor {
     type Result = ();
     fn handle(&mut self, msg: consume::CommitRequest, _ctx: &mut Self::Context) -> Self::Result {
-        self.signal_bus
-            .as_ref()
-            .unwrap()
-            .send(Signal::COMMIT(msg.0))
-            .expect("Failed to send Signal::Commit");
+        let topic = msg.0.topic();
+        match self.active_topic_threads.get(topic) {
+            Some(att) => {
+                if att
+                    .signal_bus
+                    .send(ConsumeSignal::Commit(msg.0.clone()))
+                    .is_err()
+                {
+                    let partition = msg.0.partition();
+                    let offset = msg.0.offset();
+                    // Ignore. Because of `At least once`.
+                    info!(
+                        "Failed to commit (topic: {}, partition: {}, offset: {})",
+                        topic, partition, offset
+                    );
+                };
+            }
+            None => {
+                // Ignore. Because of `At least once`.
+                info!("Topic thread is not activated (topic: {})", topic);
+            }
+        };
     }
 }
 
-impl Handler<consume::StopRequest> for ConsumeActor {
+impl Handler<consume::RemoveRequest> for ConsumeActor {
     type Result = ();
-    fn handle(&mut self, _msg: consume::StopRequest, ctx: &mut Self::Context) -> Self::Result {
-        let stopping = self.stopping.get_mut();
-        if *stopping {
-            return;
-        }
-        *stopping = true;
-        let threads = std::mem::take(&mut self.threads);
-        let mut deadline = 5;
-        loop {
-            let mut finished = true;
-            for thread in &threads {
-                if thread.is_finished() {
-                    continue;
+    fn handle(&mut self, msg: consume::RemoveRequest, ctx: &mut Self::Context) -> Self::Result {
+        let consume::RemoveRequest(topic) = msg;
+        if let Some(att) = self.active_topic_threads.remove(&topic) {
+            info!(
+                "Topic thread is removed from `active_topic_threads` (topic: {})",
+                topic
+            );
+            // When `send` returns Err, thread has already been finished.
+            if att.signal_bus.send(ConsumeSignal::End).is_ok() && att.thread.join().is_err() {
+                error!("Panic occurred and shutdown ConsumeActor");
+                let active_topic_threads = std::mem::take(&mut self.active_topic_threads);
+                for (key, att) in active_topic_threads.into_iter() {
+                    if att.signal_bus.send(ConsumeSignal::End).is_err() {
+                        error!("Topic thread is not activated (topic: {})", key);
+                    }
+                    if att.thread.join().is_err() {
+                        error!(
+                            "Failed to shutdown topic thread gracefully (topic: {})",
+                            key
+                        );
+                    }
                 }
-                finished = false;
-            }
-            if finished {
-                break;
-            }
-            thread::sleep(Duration::from_secs(1));
-            deadline -= 1;
-            if deadline >= 0 {
-                break;
+                ctx.stop();
             }
         }
-        ctx.stop();
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::panic::{self, AssertUnwindSafe};
+
+    struct NoopActor;
+
+    impl Actor for NoopActor {
+        type Context = Context<Self>;
+    }
+
+    impl Handler<process::NotifyRequest> for NoopActor {
+        type Result = ();
+        fn handle(
+            &mut self,
+            _msg: process::NotifyRequest,
+            _ctx: &mut Self::Context,
+        ) -> Self::Result {
+            // noop
+        }
+    }
+
+    fn run_test<F>(topics: Vec<String>, timeout: Duration, test_fn: F) -> thread::Result<()>
+    where
+        F: FnOnce(Addr<ConsumeActor>) -> () + Send + 'static,
+    {
+        let test_fn = |addr| panic::catch_unwind(AssertUnwindSafe(|| test_fn(addr)));
+        let system_runner = System::new();
+        let process_arbiter = Arbiter::new();
+        let process_addr = Actor::start_in_arbiter(
+            &process_arbiter.handle(),
+            move |_: &mut Context<NoopActor>| NoopActor,
+        );
+
+        let consume_arbiter = Arbiter::new();
+        let consume_addr = Actor::start_in_arbiter(&consume_arbiter.handle(), {
+            let recipient = process_addr.clone().recipient();
+            move |_: &mut Context<ConsumeActor>| {
+                ConsumeActor::new(HashMap::new(), topics, recipient)
+            }
+        });
+        let handle = {
+            let system = System::current();
+            thread::spawn(move || {
+                loop {
+                    let consume_addr = consume_addr.clone();
+                    let result = test_fn(consume_addr);
+                    if result.is_err() {
+                        // TODO timeout process. continue
+                        break;
+                    }
+                }
+                system.stop();
+            })
+        };
+        system_runner.run();
+        handle.join()
+    }
+
+    #[test]
+    fn test_add_request() {}
 }

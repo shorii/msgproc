@@ -1,11 +1,10 @@
 use crate::internal::msg::{consume, process};
 use crate::internal::utils::RecipientExt;
 use crate::kafka::alias::Topic;
-use crate::kafka::consumer::IConsumer;
+use crate::kafka::consumer::{BaseConsumer, IConsumer};
 use actix::prelude::*;
 use crossbeam::channel;
 use log::{error, info};
-use rdkafka::consumer::BaseConsumer;
 use rdkafka::message::{Message, OwnedMessage};
 use rdkafka::ClientConfig;
 use std::collections::{HashMap, HashSet};
@@ -230,4 +229,67 @@ impl Handler<consume::RemoveRequest> for ConsumeActor {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::panic::{self, AssertUnwindSafe};
+
+    struct NoopActor;
+
+    impl Actor for NoopActor {
+        type Context = Context<Self>;
+    }
+
+    impl Handler<process::NotifyRequest> for NoopActor {
+        type Result = ();
+        fn handle(
+            &mut self,
+            _msg: process::NotifyRequest,
+            _ctx: &mut Self::Context,
+        ) -> Self::Result {
+            // noop
+        }
+    }
+
+    fn run_test<F>(topics: Vec<String>, timeout: Duration, test_fn: F) -> thread::Result<()>
+    where
+        F: FnOnce(Addr<ConsumeActor>) -> () + Send + 'static,
+    {
+        let test_fn = |addr| panic::catch_unwind(AssertUnwindSafe(|| test_fn(addr)));
+        let system_runner = System::new();
+        let process_arbiter = Arbiter::new();
+        let process_addr = Actor::start_in_arbiter(
+            &process_arbiter.handle(),
+            move |_: &mut Context<NoopActor>| NoopActor,
+        );
+
+        let consume_arbiter = Arbiter::new();
+        let consume_addr = Actor::start_in_arbiter(&consume_arbiter.handle(), {
+            let recipient = process_addr.clone().recipient();
+            move |_: &mut Context<ConsumeActor>| {
+                ConsumeActor::new(HashMap::new(), topics, recipient)
+            }
+        });
+        let handle = {
+            let system = System::current();
+            thread::spawn(move || {
+                loop {
+                    let consume_addr = consume_addr.clone();
+                    let result = test_fn(consume_addr);
+                    if result.is_err() {
+                        // TODO timeout process. continue
+                        break;
+                    }
+                }
+                system.stop();
+            })
+        };
+        system_runner.run();
+        handle.join()
+    }
+
+    #[test]
+    fn test_add_request() {}
 }

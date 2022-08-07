@@ -32,12 +32,12 @@ impl MsgProcBuilder {
         }
     }
 
-    pub fn config(&mut self, config: HashMap<String, String>) -> &mut Self {
+    pub fn config(mut self, config: HashMap<String, String>) -> Self {
         self.config = Some(config);
         self
     }
 
-    pub fn topics<T, U>(&mut self, topics: T) -> &mut Self
+    pub fn topics<T, U>(mut self, topics: T) -> Self
     where
         T: Into<Vec<U>>,
         U: Into<String>,
@@ -47,7 +47,7 @@ impl MsgProcBuilder {
         self
     }
 
-    pub fn processor(&mut self, processor: Box<dyn IMsgProcessor>) -> &mut Self {
+    pub fn processor(mut self, processor: Box<dyn IMsgProcessor>) -> Self {
         self.processors.push(processor);
         self
     }

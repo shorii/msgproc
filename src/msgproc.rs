@@ -1,7 +1,7 @@
 use crate::consumer::{IStreamConsumer, Message, StreamConsumerConfig};
 use crate::context::Context;
 use crate::processor::{DefaultProcessor, IProcessor, Processor};
-use log::{error, info};
+use log::{debug, error, info};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Semaphore};
@@ -92,6 +92,8 @@ impl MsgProc {
         loop {
             match stream.next().await {
                 Some(Ok(msg)) => {
+                    debug!("Read message from stream.");
+
                     let owned_msg = msg.detach();
                     let permit = self.semaphore.clone().acquire_owned().await.unwrap();
                     let mut processor = Processor::new(
@@ -113,7 +115,6 @@ impl MsgProc {
                                 return;
                             }
 
-                            // TODO use channel watch to store offset
                             if consumer.store_offset(&topic, partition, offset).is_err() {
                                 error!(
                                     "Failed to store offset.(topic={}, partition={}, offset={}",
@@ -127,8 +128,14 @@ impl MsgProc {
                         }
                     });
                 }
-                Some(Err(_)) => break,
-                None => continue,
+                Some(Err(_)) => {
+                    error!("KafkaError occurred.");
+                    break;
+                }
+                None => {
+                    debug!("Message does not exist in broker.");
+                    continue;
+                }
             }
         }
     }

@@ -7,7 +7,7 @@ struct Processor;
 
 #[async_trait]
 impl IProcessor for Processor {
-    async fn execute(&self, msg: OwnedMessage) -> Result<(), &'static str> {
+    async fn execute(&self, msg: consumer::OwnedMessage) -> Result<(), &'static str> {
         println!("{:?}", msg);
         Ok(())
     }
@@ -16,7 +16,7 @@ impl IProcessor for Processor {
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    let mut msgproc = MsgProcConfig::new()
+    let msgproc = MsgProcConfig::<MsgProc>::new()
         .set("bootstrap.servers", "localhost:9092")
         .set("group.id", "group")
         .set("session.timeout.ms", "6000")
@@ -24,7 +24,6 @@ async fn main() {
         .topics(&["sample_topic"])
         .processor(Processor)
         .limit(64)
-        .create()
-        .unwrap();
+        .create();
     msgproc.run(signal::ctrl_c()).await;
 }

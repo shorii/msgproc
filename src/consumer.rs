@@ -1,75 +1,203 @@
+use crate::context::Context;
+use crate::kafka::consumer::{IStreamConsumer, Message, OwnedMessage};
+use crate::processor::{Processor, ProcessorMut};
 use async_trait::async_trait;
-use rdkafka::config::FromClientConfig;
-use rdkafka::consumer::stream_consumer::StreamConsumer as BaseStreamConsumer;
-use rdkafka::consumer::Consumer;
-use rdkafka::consumer::MessageStream;
-use rdkafka::error::KafkaResult;
-use rdkafka::message::BorrowedMessage;
-use rdkafka::ClientConfig;
+use log::{debug, error};
+use std::sync::Arc;
+use tokio::sync::{mpsc, Semaphore};
+use tokio::task;
+use tokio_stream::StreamExt;
 
-pub use rdkafka::message::{Message, OwnedMessage};
-
-pub(crate) struct StreamConsumerConfig {
-    base_config: ClientConfig,
+pub struct ConsumerBase {
+    consumer: Arc<Box<dyn IStreamConsumer>>,
+    context: Context,
+    shutdown_complete_rx: Option<mpsc::Receiver<()>>,
+    shutdown_complete_tx: Option<mpsc::Sender<()>>,
 }
 
-impl StreamConsumerConfig {
-    pub(crate) fn new() -> StreamConsumerConfig {
-        StreamConsumerConfig {
-            base_config: ClientConfig::new(),
+impl ConsumerBase {
+    pub(crate) fn new(
+        consumer: impl IStreamConsumer,
+        context: Context,
+        shutdown_complete_rx: mpsc::Receiver<()>,
+        shutdown_complete_tx: mpsc::Sender<()>,
+    ) -> Self {
+        Self {
+            consumer: Arc::new(Box::new(consumer)),
+            context,
+            shutdown_complete_rx: Some(shutdown_complete_rx),
+            shutdown_complete_tx: Some(shutdown_complete_tx),
+        }
+    }
+}
+
+#[async_trait]
+pub trait IConsumer {
+    type TProcessor;
+    async fn run_main_consume(&mut self);
+    async fn wait(&mut self);
+}
+
+pub struct Consumer {
+    base: ConsumerBase,
+    processor: Processor,
+    semaphore: Arc<Semaphore>,
+}
+
+impl Consumer {
+    pub fn new(base: ConsumerBase, processor: Processor, semaphore: Arc<Semaphore>) -> Self {
+        Self {
+            base,
+            processor,
+            semaphore,
+        }
+    }
+}
+
+#[async_trait]
+impl IConsumer for Consumer {
+    type TProcessor = Processor;
+
+    async fn run_main_consume(&mut self) {
+        let mut stream = self.base.consumer.stream();
+        loop {
+            if self.base.context.is_shutdown() {
+                break;
+            }
+            match stream.next().await {
+                Some(Ok(msg)) => {
+                    debug!("Read message from stream.");
+
+                    let owned_msg = msg.detach();
+                    let permit = self.semaphore.clone().acquire_owned().await.unwrap();
+                    let mut processor = self.processor.clone();
+                    task::spawn({
+                        let consumer = self.base.consumer.clone();
+                        let topic = msg.topic().to_string();
+                        let partition = msg.partition();
+                        let offset = msg.offset();
+                        let mut context = self.base.context.clone();
+                        async move {
+                            if let Err(e) = processor.run(owned_msg).await {
+                                error!("Failed to run processor.({})", e);
+                                context.cancel().await;
+                                drop(permit);
+                                return;
+                            }
+
+                            if consumer.store_offset(&topic, partition, offset).is_err() {
+                                error!(
+                                    "Failed to store offset.(topic={}, partition={}, offset={}",
+                                    topic, partition, offset
+                                );
+                                context.cancel().await;
+                                drop(permit);
+                                return;
+                            }
+                            drop(permit);
+                        }
+                    });
+                }
+                Some(Err(_)) => {
+                    error!("KafkaError occurred.");
+                    break;
+                }
+                None => {
+                    debug!("Message does not exist in broker.");
+                    continue;
+                }
+            }
         }
     }
 
-    pub(crate) fn set<K, V>(&mut self, key: K, value: V) -> &mut StreamConsumerConfig
-    where
-        K: Into<String>,
-        V: Into<String>,
-    {
-        self.base_config.set(key.into(), value.into());
-        self
-    }
+    async fn wait(&mut self) {
+        let shutdown_complete_tx = self.base.shutdown_complete_tx.take().unwrap();
+        drop(shutdown_complete_tx);
 
-    pub(crate) fn create(&mut self) -> KafkaResult<StreamConsumer> {
-        self.base_config.set("enable.auto.commit", "true");
-        self.base_config.set("enable.auto.offset.store", "false");
-        StreamConsumer::from_config(&self.base_config)
+        let mut shutdown_complete_rx = self.base.shutdown_complete_rx.take().unwrap();
+        let _ = shutdown_complete_rx.recv().await;
+    }
+}
+
+pub struct ConsumerMut {
+    base: ConsumerBase,
+    processor_mut: ProcessorMut,
+    buffer_size: usize,
+}
+
+impl ConsumerMut {
+    pub fn new(base: ConsumerBase, processor_mut: ProcessorMut, buffer_size: usize) -> Self {
+        Self {
+            base,
+            processor_mut,
+            buffer_size,
+        }
     }
 }
 
 #[async_trait]
-pub(crate) trait IStreamConsumer: 'static + Send + Sync {
-    fn stream(&self) -> MessageStream<'_>;
-    async fn recv(&self) -> KafkaResult<BorrowedMessage>;
-    fn subscribe(&self, topics: &[&str]) -> KafkaResult<()>;
-    fn store_offset(&self, topics: &str, partition: i32, offset: i64) -> KafkaResult<()>;
-}
+impl IConsumer for ConsumerMut {
+    type TProcessor = ProcessorMut;
 
-pub(crate) struct StreamConsumer {
-    base_consumer: BaseStreamConsumer,
-}
+    async fn run_main_consume(&mut self) {
+        let (msg_tx, mut msg_rx) = mpsc::channel::<OwnedMessage>(self.buffer_size);
+        task::spawn({
+            let mut context = self.base.context.clone();
+            let mut processor_mut = self.processor_mut.clone();
+            let consumer = self.base.consumer.clone();
+            async move {
+                while let Some(msg) = msg_rx.recv().await {
+                    if let Err(e) = processor_mut.run(msg.clone()).await {
+                        error!("Failed to run processor.({})", e);
+                        context.cancel().await;
+                        break;
+                    }
+                    let topic = msg.topic();
+                    let partition = msg.partition();
+                    let offset = msg.offset();
+                    if consumer.store_offset(topic, partition, offset).is_err() {
+                        error!(
+                            "Failed to store offset.(topic={}, partition={}, offset={}",
+                            topic, partition, offset
+                        );
+                        context.cancel().await;
+                        break;
+                    }
+                }
+            }
+        });
 
-#[async_trait]
-impl IStreamConsumer for StreamConsumer {
-    fn stream(&self) -> MessageStream<'_> {
-        self.base_consumer.stream()
+        let mut stream = self.base.consumer.stream();
+        loop {
+            if self.base.context.is_shutdown() {
+                break;
+            }
+            match stream.next().await {
+                Some(Ok(msg)) => {
+                    debug!("Read message from stream.");
+                    let owned_msg = msg.detach();
+                    if msg_tx.send(owned_msg).await.is_err() {
+                        error!("ProcessorMut is not running.");
+                        break;
+                    }
+                }
+                Some(Err(_)) => {
+                    error!("KafkaError occurred.");
+                    break;
+                }
+                None => {
+                    debug!("Message does not exist in broker.");
+                    continue;
+                }
+            }
+        }
     }
 
-    async fn recv(&self) -> KafkaResult<BorrowedMessage> {
-        self.base_consumer.recv().await
-    }
+    async fn wait(&mut self) {
+        let shutdown_complete_tx = self.base.shutdown_complete_tx.take().unwrap();
+        drop(shutdown_complete_tx);
 
-    fn subscribe(&self, topics: &[&str]) -> KafkaResult<()> {
-        self.base_consumer.subscribe(topics)
-    }
-
-    fn store_offset(&self, topic: &str, partition: i32, offset: i64) -> KafkaResult<()> {
-        self.base_consumer.store_offset(topic, partition, offset)
-    }
-}
-
-impl FromClientConfig for StreamConsumer {
-    fn from_config(config: &rdkafka::ClientConfig) -> KafkaResult<Self> {
-        let base_consumer = BaseStreamConsumer::from_config(config)?;
-        Ok(StreamConsumer { base_consumer })
+        let mut shutdown_complete_rx = self.base.shutdown_complete_rx.take().unwrap();
+        let _ = shutdown_complete_rx.recv().await;
     }
 }

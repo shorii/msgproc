@@ -1,36 +1,65 @@
-use crate::consumer::{IStreamConsumer, Message, StreamConsumerConfig};
+use crate::consumer::{Consumer, ConsumerBase, ConsumerMut, IConsumer};
 use crate::context::Context;
-use crate::processor::{DefaultProcessor, IProcessor, Processor};
-use log::{debug, error, info};
+use crate::kafka::config::StreamConsumerConfig;
+use crate::options::AnyOptions;
+use crate::processor::{
+    DefaultProcessor, DefaultProcessorMut, IProcessor, IProcessorMut, Processor, ProcessorMut,
+};
+use async_trait::async_trait;
+use log::{error, info};
 use std::future::Future;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, Semaphore};
-use tokio::task;
-use tokio_stream::StreamExt;
+use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
 
-pub struct MsgProcConfig {
+macro_rules! create_base_consumer {
+    ($config: expr) => {
+        ConsumerBase::new(
+            $config.consumer_config.clone().unwrap().create().unwrap(),
+            $config.context.clone(),
+            $config.shutdown_complete_rx.take().unwrap(),
+            $config.shutdown_complete_tx.take().unwrap(),
+        )
+    };
+}
+
+macro_rules! run_imsgproc {
+    ($consumer: expr, $shutdown: expr) => {
+        info!("Start processing.");
+        tokio::select! {
+            _ = $consumer.run_main_consume() => {
+                error!("Error occurred.");
+            }
+            _ = $shutdown => {
+                info!("Catch shutdown event. Shutdowning...");
+            }
+        }
+        $consumer.wait().await;
+    };
+}
+
+#[async_trait]
+pub trait IMsgProc {
+    type TConsumer: IConsumer;
+
+    async fn run(self, shutdown: impl Future + Send);
+}
+pub struct MsgProcConfig<M>
+where
+    M: IMsgProc,
+{
     consumer_config: Option<StreamConsumerConfig>,
     topics: Vec<String>,
-    processor: Option<Box<dyn IProcessor>>,
-    limit: usize,
+    processor: <M::TConsumer as IConsumer>::TProcessor,
+    context: Context,
+    shutdown_complete_rx: Option<mpsc::Receiver<()>>,
+    shutdown_complete_tx: Option<mpsc::Sender<()>>,
+    options: AnyOptions,
 }
 
-impl Default for MsgProcConfig {
-    fn default() -> Self {
-        Self {
-            consumer_config: Some(StreamConsumerConfig::new()),
-            topics: vec![],
-            processor: Some(Box::new(DefaultProcessor)),
-            limit: 8,
-        }
-    }
-}
-
-impl MsgProcConfig {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
+impl<M> MsgProcConfig<M>
+where
+    M: IMsgProc,
+{
     pub fn set<K, V>(&mut self, key: K, value: V) -> &mut Self
     where
         K: Into<String>,
@@ -47,114 +76,146 @@ impl MsgProcConfig {
         self.topics = topics.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         self
     }
+}
 
-    pub fn processor(&mut self, processor: impl IProcessor) -> &mut Self {
-        self.processor = Some(Box::new(processor));
-        self
+impl Default for MsgProcConfig<MsgProc> {
+    fn default() -> Self {
+        let mut options = AnyOptions::new();
+        options.set::<usize>(Self::LIMIT, 8);
+        let (notify_shutdown, _) = broadcast::channel(1);
+        let context = Context::new(notify_shutdown.clone());
+        let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
+        let processor = Processor::new(
+            Arc::new(Box::new(DefaultProcessor)),
+            context.clone(),
+            shutdown_complete_tx.clone(),
+        );
+        Self {
+            consumer_config: Some(StreamConsumerConfig::new()),
+            topics: vec![],
+            processor,
+            context,
+            shutdown_complete_rx: Some(shutdown_complete_rx),
+            shutdown_complete_tx: Some(shutdown_complete_tx),
+            options,
+        }
+    }
+}
+
+impl Default for MsgProcConfig<MsgProcMut> {
+    fn default() -> Self {
+        let mut options = AnyOptions::new();
+        options.set::<usize>(Self::BUFFER_SIZE, 64);
+        let (notify_shutdown, _) = broadcast::channel(1);
+        let context = Context::new(notify_shutdown.clone());
+        let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
+        let processor = ProcessorMut::new(
+            Arc::new(Mutex::new(Box::new(DefaultProcessorMut))),
+            context.clone(),
+            shutdown_complete_tx.clone(),
+        );
+        Self {
+            consumer_config: Some(StreamConsumerConfig::new()),
+            topics: vec![],
+            processor,
+            context,
+            shutdown_complete_rx: Some(shutdown_complete_rx),
+            shutdown_complete_tx: Some(shutdown_complete_tx),
+            options,
+        }
+    }
+}
+
+impl MsgProcConfig<MsgProc> {
+    const LIMIT: &'static str = "limit";
+
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn limit(&mut self, limit: usize) -> &mut Self {
-        self.limit = limit;
+        self.options.set(Self::LIMIT, limit);
         self
     }
 
-    pub fn create(&mut self) -> Result<MsgProc, &'static str> {
-        let (notify_shutdown, _) = broadcast::channel(1);
-        let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
-        let mut consumer_config = self.consumer_config.take().unwrap();
-        let stream_consumer = consumer_config.create().unwrap();
-        stream_consumer
-            .subscribe(&self.topics.iter().map(|x| x.as_str()).collect::<Vec<_>>())
-            .unwrap();
-        Ok(MsgProc {
-            consumer: Arc::new(Box::new(stream_consumer)),
-            processor: Arc::new(self.processor.take().unwrap()),
-            semaphore: Arc::new(Semaphore::new(self.limit)),
-            context: Context::new(notify_shutdown.clone()),
-            shutdown_complete_rx: Some(shutdown_complete_rx),
-            shutdown_complete_tx: Some(shutdown_complete_tx),
-        })
+    pub fn processor(&mut self, processor: impl IProcessor) -> &mut Self {
+        let processor = Processor::new(
+            Arc::new(Box::new(processor)),
+            self.context.clone(),
+            self.shutdown_complete_tx.clone().unwrap(),
+        );
+        self.processor = processor;
+        self
+    }
+
+    pub fn create(&mut self) -> MsgProc {
+        let base = create_base_consumer!(self);
+        let limit = self.options.get(Self::LIMIT);
+        let semaphore = Arc::new(Semaphore::new(limit));
+        MsgProc {
+            base,
+            processor: self.processor.clone(),
+            semaphore,
+        }
+    }
+}
+
+impl MsgProcConfig<MsgProcMut> {
+    const BUFFER_SIZE: &'static str = "buffer_size";
+
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn processor_mut(&mut self, processor_mut: impl IProcessorMut) -> &mut Self {
+        let processor_mut = ProcessorMut::new(
+            Arc::new(Mutex::new(Box::new(processor_mut))),
+            self.context.clone(),
+            self.shutdown_complete_tx.clone().unwrap(),
+        );
+        self.processor = processor_mut;
+        self
+    }
+
+    pub fn create(&mut self) -> MsgProcMut {
+        let base = create_base_consumer!(self);
+        let buffer_size = self.options.get(Self::BUFFER_SIZE);
+        MsgProcMut {
+            base,
+            processor_mut: self.processor.clone(),
+            buffer_size,
+        }
     }
 }
 
 pub struct MsgProc {
-    consumer: Arc<Box<dyn IStreamConsumer>>,
-    processor: Arc<Box<dyn IProcessor>>,
+    base: ConsumerBase,
+    processor: Processor,
     semaphore: Arc<Semaphore>,
-    context: Context,
-    shutdown_complete_rx: Option<mpsc::Receiver<()>>,
-    shutdown_complete_tx: Option<mpsc::Sender<()>>,
 }
 
-impl MsgProc {
-    async fn run_main_task(&mut self) {
-        let mut stream = self.consumer.stream();
-        loop {
-            match stream.next().await {
-                Some(Ok(msg)) => {
-                    debug!("Read message from stream.");
+#[async_trait]
+impl IMsgProc for MsgProc {
+    type TConsumer = Consumer;
 
-                    let owned_msg = msg.detach();
-                    let permit = self.semaphore.clone().acquire_owned().await.unwrap();
-                    let mut processor = Processor::new(
-                        self.processor.clone(),
-                        self.context.clone(),
-                        self.shutdown_complete_tx.clone().unwrap(),
-                    );
-                    task::spawn({
-                        let consumer = self.consumer.clone();
-                        let topic = msg.topic().to_string();
-                        let partition = msg.partition();
-                        let offset = msg.offset();
-                        let mut context = self.context.clone();
-                        async move {
-                            if let Err(e) = processor.run(owned_msg).await {
-                                error!("Failed to run processor.({})", e);
-                                context.cancel().await;
-                                drop(permit);
-                                return;
-                            }
-
-                            if consumer.store_offset(&topic, partition, offset).is_err() {
-                                error!(
-                                    "Failed to store offset.(topic={}, partition={}, offset={}",
-                                    topic, partition, offset
-                                );
-                                context.cancel().await;
-                                drop(permit);
-                                return;
-                            }
-                            drop(permit);
-                        }
-                    });
-                }
-                Some(Err(_)) => {
-                    error!("KafkaError occurred.");
-                    break;
-                }
-                None => {
-                    debug!("Message does not exist in broker.");
-                    continue;
-                }
-            }
-        }
+    async fn run(self, shutdown: impl Future + Send) {
+        let mut consumer = Consumer::new(self.base, self.processor, self.semaphore);
+        run_imsgproc!(consumer, shutdown);
     }
+}
 
-    pub async fn run(&mut self, shutdown: impl Future) {
-        info!("Start processing.");
-        tokio::select! {
-            _ = self.run_main_task() => {
-                error!("Error occurred.");
-            }
-            _ = shutdown => {
-                info!("Catch shutdown event. Shutdowning...");
-            }
-        }
+pub struct MsgProcMut {
+    base: ConsumerBase,
+    processor_mut: ProcessorMut,
+    buffer_size: usize,
+}
 
-        let shutdown_complete_tx = self.shutdown_complete_tx.take().unwrap();
-        drop(shutdown_complete_tx);
+#[async_trait]
+impl IMsgProc for MsgProcMut {
+    type TConsumer = ConsumerMut;
 
-        let mut shutdown_complete_rx = self.shutdown_complete_rx.take().unwrap();
-        let _ = shutdown_complete_rx.recv().await;
+    async fn run(self, shutdown: impl Future + Send) {
+        let mut consumer_mut = ConsumerMut::new(self.base, self.processor_mut, self.buffer_size);
+        run_imsgproc!(consumer_mut, shutdown);
     }
 }

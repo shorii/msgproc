@@ -1,9 +1,9 @@
 mod consumer;
 mod context;
-pub mod kafka;
-pub mod msgproc;
+mod kafka;
+mod msgproc;
 mod options;
-pub mod processor;
+mod processor;
 
 pub mod prelude {
     pub use super::kafka::*;

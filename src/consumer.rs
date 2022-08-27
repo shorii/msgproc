@@ -4,9 +4,55 @@ use crate::processor::{Processor, ProcessorMut};
 use async_trait::async_trait;
 use log::{debug, error};
 use std::sync::Arc;
+use thiserror::Error;
 use tokio::sync::{mpsc, Semaphore};
 use tokio::task;
 use tokio_stream::StreamExt;
+
+#[derive(Error, Debug)]
+#[error("ConsumeError occurred.")]
+pub struct ConsumeError {
+    msg: String,
+    #[source]
+    source: anyhow::Error,
+}
+
+macro_rules! raise_consume_error {
+    ($msg: expr, $source: expr) => {
+        return Err(ConsumeError {
+            msg: $msg.to_string(),
+            source: $source.into(),
+        });
+    };
+}
+
+macro_rules! consume_loop {
+    (($stream: expr, $context: expr) => $proc: expr) => {
+        loop {
+            if $context.is_shutdown() {
+                break;
+            }
+            match $stream.next().await {
+                Some(Ok(msg)) => {
+                    debug!("Read message from stream.");
+                    let owned_msg = msg.detach();
+                    if $proc(owned_msg).await.is_err() {
+                        error!("Processor Error occurred.");
+                        break;
+                    }
+                }
+                Some(Err(_)) => {
+                    error!("KafkaError occurred.");
+                    break;
+                }
+                None => {
+                    debug!("Message does not exist in broker.");
+                    continue;
+                }
+            }
+        }
+    };
+}
 
 pub struct ConsumerBase {
     consumer: Arc<Box<dyn IStreamConsumer>>,
@@ -60,54 +106,42 @@ impl IConsumer for Consumer {
 
     async fn run_main_consume(&mut self) {
         let mut stream = self.base.consumer.stream();
-        loop {
-            if self.base.context.is_shutdown() {
-                break;
-            }
-            match stream.next().await {
-                Some(Ok(msg)) => {
-                    debug!("Read message from stream.");
+        consume_loop!((stream, self.base.context) => |msg: OwnedMessage| async {
+            let permit = match self.semaphore.clone().acquire_owned().await {
+                Ok(p) => { p },
+                Err(e) => {
+                    raise_consume_error!("Failed to acquire permit.", e);
+                }
+            };
+            let mut processor = self.processor.clone();
+            task::spawn({
+                let consumer = self.base.consumer.clone();
+                let topic = msg.topic().to_string();
+                let partition = msg.partition();
+                let offset = msg.offset();
+                let mut context = self.base.context.clone();
+                async move {
+                    if let Err(e) = processor.run(msg).await {
+                        error!("Failed to run processor.({})", e);
+                        context.cancel().await;
+                        drop(permit);
+                        return;
+                    }
 
-                    let owned_msg = msg.detach();
-                    let permit = self.semaphore.clone().acquire_owned().await.unwrap();
-                    let mut processor = self.processor.clone();
-                    task::spawn({
-                        let consumer = self.base.consumer.clone();
-                        let topic = msg.topic().to_string();
-                        let partition = msg.partition();
-                        let offset = msg.offset();
-                        let mut context = self.base.context.clone();
-                        async move {
-                            if let Err(e) = processor.run(owned_msg).await {
-                                error!("Failed to run processor.({})", e);
-                                context.cancel().await;
-                                drop(permit);
-                                return;
-                            }
-
-                            if consumer.store_offset(&topic, partition, offset).is_err() {
-                                error!(
-                                    "Failed to store offset.(topic={}, partition={}, offset={}",
-                                    topic, partition, offset
-                                );
-                                context.cancel().await;
-                                drop(permit);
-                                return;
-                            }
-                            drop(permit);
-                        }
-                    });
+                    if consumer.store_offset(&topic, partition, offset).is_err() {
+                        error!(
+                            "Failed to store offset.(topic={}, partition={}, offset={}",
+                            topic, partition, offset
+                        );
+                        context.cancel().await;
+                        drop(permit);
+                        return;
+                    }
+                    drop(permit);
                 }
-                Some(Err(_)) => {
-                    error!("KafkaError occurred.");
-                    break;
-                }
-                None => {
-                    debug!("Message does not exist in broker.");
-                    continue;
-                }
-            }
-        }
+            });
+            Ok(())
+        });
     }
 
     async fn wait(&mut self) {
@@ -168,29 +202,12 @@ impl IConsumer for ConsumerMut {
         });
 
         let mut stream = self.base.consumer.stream();
-        loop {
-            if self.base.context.is_shutdown() {
-                break;
+        consume_loop!((stream, self.base.context) => |owned_msg| async {
+            if let Err(e) = msg_tx.send(owned_msg).await {
+                raise_consume_error!("Failed to execute ProcessorMut.", e);
             }
-            match stream.next().await {
-                Some(Ok(msg)) => {
-                    debug!("Read message from stream.");
-                    let owned_msg = msg.detach();
-                    if msg_tx.send(owned_msg).await.is_err() {
-                        error!("ProcessorMut is not running.");
-                        break;
-                    }
-                }
-                Some(Err(_)) => {
-                    error!("KafkaError occurred.");
-                    break;
-                }
-                None => {
-                    debug!("Message does not exist in broker.");
-                    continue;
-                }
-            }
-        }
+            Ok(())
+        });
     }
 
     async fn wait(&mut self) {

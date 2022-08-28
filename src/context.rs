@@ -37,3 +37,41 @@ impl Context {
         self.shutdown.store(true, Ordering::SeqCst);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::Mutex;
+    use tokio::task;
+    use tokio::time::{sleep, Duration};
+
+    #[tokio::test]
+    async fn test() {
+        let (tx, _) = broadcast::channel(1);
+        let mut context = Context::new(tx);
+        let count = Arc::new(Mutex::new(0));
+        let task = {
+            let count = count.clone();
+            async move {
+                loop {
+                    let mut r_count = count.lock().await;
+                    *r_count += 1;
+                }
+            }
+        };
+        task::spawn({
+            let mut context = context.clone();
+            async move {
+                sleep(Duration::from_secs(1)).await;
+                context.cancel().await;
+            }
+        });
+        tokio::select! {
+            _ = task => {},
+            _ = context.done() => {}
+        };
+        let count = count.lock().await;
+        assert!(*count > 0);
+        assert_eq!(context.is_shutdown(), true);
+    }
+}

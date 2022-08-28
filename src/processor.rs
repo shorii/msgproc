@@ -91,3 +91,127 @@ impl ProcessorMut {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rdkafka::Timestamp;
+    use tokio::sync::broadcast;
+    use tokio::task;
+    use tokio::time::{sleep, Duration};
+
+    fn create_message(topic: &str, partition: i32, offset: i64, payload: &str) -> OwnedMessage {
+        let payload: Vec<u8> = payload.as_bytes().to_vec();
+        OwnedMessage::new(
+            Some(payload),
+            None,
+            topic.to_string(),
+            Timestamp::CreateTime(0),
+            partition,
+            offset,
+            None,
+        )
+    }
+
+    mod processor {
+        use super::*;
+        pub struct HeavyComputingProcessor;
+
+        #[async_trait]
+        impl IProcessor for HeavyComputingProcessor {
+            async fn execute(&self, _msg: OwnedMessage) -> Result<(), &'static str> {
+                loop {
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+
+        #[tokio::test]
+        async fn test_context() {
+            let (tx, _) = broadcast::channel(1);
+            let context = Context::new(tx);
+            let (shudown_complete_tx, _) = mpsc::channel(1);
+            let mut processor = Processor {
+                context: context.clone(),
+                proc: Arc::new(Box::new(HeavyComputingProcessor)),
+                _shutdown_complete_tx: shudown_complete_tx,
+            };
+            task::spawn({
+                let mut context = context.clone();
+                async move {
+                    sleep(Duration::from_secs(1)).await;
+                    context.cancel().await;
+                }
+            });
+            assert!(processor
+                .run(create_message("topic", 0, 0, "payload"))
+                .await
+                .is_err());
+        }
+
+        #[tokio::test]
+        async fn test_shutdown_complete_tx() {
+            let (tx, _) = broadcast::channel(1);
+            let context = Context::new(tx);
+            let (shudown_complete_tx, mut shutdown_complete_rx) = mpsc::channel(1);
+            let processor = Processor {
+                context: context.clone(),
+                proc: Arc::new(Box::new(HeavyComputingProcessor)),
+                _shutdown_complete_tx: shudown_complete_tx,
+            };
+            drop(processor);
+            assert!(shutdown_complete_rx.recv().await.is_none());
+        }
+    }
+
+    mod processor_mut {
+        use super::*;
+        pub struct HeavyComputingProcessorMut;
+
+        #[async_trait]
+        impl IProcessorMut for HeavyComputingProcessorMut {
+            async fn execute(&mut self, _msg: OwnedMessage) -> Result<(), &'static str> {
+                loop {
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+
+        #[tokio::test]
+        async fn test_context() {
+            let (tx, _) = broadcast::channel(1);
+            let context = Context::new(tx);
+            let (shudown_complete_tx, _) = mpsc::channel(1);
+            let mut processor_mut = ProcessorMut {
+                context: context.clone(),
+                proc: Arc::new(Mutex::new(Box::new(HeavyComputingProcessorMut))),
+                _shutdown_complete_tx: shudown_complete_tx,
+            };
+            task::spawn({
+                let mut context = context.clone();
+                async move {
+                    sleep(Duration::from_secs(1)).await;
+                    context.cancel().await;
+                }
+            });
+            assert!(processor_mut
+                .run(create_message("topic", 0, 0, "payload"))
+                .await
+                .is_err());
+        }
+
+        #[tokio::test]
+        async fn test_shutdown_complete_tx() {
+            let (tx, _) = broadcast::channel(1);
+            let context = Context::new(tx);
+            let (shudown_complete_tx, mut shutdown_complete_rx) = mpsc::channel(1);
+            let processor = ProcessorMut {
+                context: context.clone(),
+                proc: Arc::new(Mutex::new(Box::new(HeavyComputingProcessorMut))),
+                _shutdown_complete_tx: shudown_complete_tx,
+            };
+            drop(processor);
+            assert!(shutdown_complete_rx.recv().await.is_none());
+        }
+    }
+}

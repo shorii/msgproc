@@ -2,9 +2,7 @@ use crate::consumer::{Consumer, ConsumerBase, ConsumerMut, IConsumer};
 use crate::context::Context;
 use crate::kafka::config::StreamConsumerConfig;
 use crate::options::AnyOptions;
-use crate::processor::{
-    DefaultProcessor, DefaultProcessorMut, IProcessor, IProcessorMut, Processor, ProcessorMut,
-};
+use crate::processor::{DefaultProcessor, DefaultProcessorMut, IProcessor, IProcessorMut};
 use async_trait::async_trait;
 use log::{error, info};
 use std::future::Future;
@@ -14,7 +12,9 @@ use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
 macro_rules! create_base_consumer {
     ($config: expr) => {
         ConsumerBase::new(
-            $config.consumer_config.clone().unwrap().create().unwrap(),
+            std::sync::Arc::new(std::boxed::Box::new(
+                $config.consumer_config.clone().unwrap().create().unwrap(),
+            )),
             $config.context.clone(),
             $config.shutdown_complete_rx.take().unwrap(),
             $config.shutdown_complete_tx.take().unwrap(),
@@ -76,6 +76,14 @@ where
         self.topics = topics.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         self
     }
+
+    pub fn consumer_buffer_size(&mut self, consumer_buffer_size: usize) -> &mut Self {
+        self.consumer_config
+            .as_mut()
+            .unwrap()
+            .set_buffer_size(consumer_buffer_size);
+        self
+    }
 }
 
 impl Default for MsgProcConfig<MsgProc> {
@@ -85,11 +93,7 @@ impl Default for MsgProcConfig<MsgProc> {
         let (notify_shutdown, _) = broadcast::channel(1);
         let context = Context::new(notify_shutdown.clone());
         let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
-        let processor = Processor::new(
-            Arc::new(Box::new(DefaultProcessor)),
-            context.clone(),
-            shutdown_complete_tx.clone(),
-        );
+        let processor: Arc<Box<dyn IProcessor>> = Arc::new(Box::new(DefaultProcessor));
         Self {
             consumer_config: Some(StreamConsumerConfig::new()),
             topics: vec![],
@@ -105,15 +109,12 @@ impl Default for MsgProcConfig<MsgProc> {
 impl Default for MsgProcConfig<MsgProcMut> {
     fn default() -> Self {
         let mut options = AnyOptions::new();
-        options.set::<usize>(Self::BUFFER_SIZE, 64);
+        options.set::<usize>(Self::PROCESSOR_BUFFER_SIZE, 64);
         let (notify_shutdown, _) = broadcast::channel(1);
         let context = Context::new(notify_shutdown.clone());
         let (shutdown_complete_tx, shutdown_complete_rx) = mpsc::channel(1);
-        let processor = ProcessorMut::new(
-            Arc::new(Mutex::new(Box::new(DefaultProcessorMut))),
-            context.clone(),
-            shutdown_complete_tx.clone(),
-        );
+        let processor: Arc<Mutex<Box<dyn IProcessorMut>>> =
+            Arc::new(Mutex::new(Box::new(DefaultProcessorMut)));
         Self {
             consumer_config: Some(StreamConsumerConfig::new()),
             topics: vec![],
@@ -139,12 +140,7 @@ impl MsgProcConfig<MsgProc> {
     }
 
     pub fn processor(&mut self, processor: impl IProcessor) -> &mut Self {
-        let processor = Processor::new(
-            Arc::new(Box::new(processor)),
-            self.context.clone(),
-            self.shutdown_complete_tx.clone().unwrap(),
-        );
-        self.processor = processor;
+        self.processor = Arc::new(Box::new(processor));
         self
     }
 
@@ -161,25 +157,26 @@ impl MsgProcConfig<MsgProc> {
 }
 
 impl MsgProcConfig<MsgProcMut> {
-    const BUFFER_SIZE: &'static str = "buffer_size";
+    const PROCESSOR_BUFFER_SIZE: &'static str = "processor_buffer_size";
 
     pub fn new() -> Self {
         Self::default()
     }
 
+    pub fn processor_buffer_size(&mut self, processor_buffer_size: usize) -> &mut Self {
+        self.options
+            .set(Self::PROCESSOR_BUFFER_SIZE, processor_buffer_size);
+        self
+    }
+
     pub fn processor_mut(&mut self, processor_mut: impl IProcessorMut) -> &mut Self {
-        let processor_mut = ProcessorMut::new(
-            Arc::new(Mutex::new(Box::new(processor_mut))),
-            self.context.clone(),
-            self.shutdown_complete_tx.clone().unwrap(),
-        );
-        self.processor = processor_mut;
+        self.processor = Arc::new(Mutex::new(Box::new(processor_mut)));
         self
     }
 
     pub fn create(&mut self) -> MsgProcMut {
         let base = create_base_consumer!(self);
-        let buffer_size = self.options.get(Self::BUFFER_SIZE);
+        let buffer_size = self.options.get(Self::PROCESSOR_BUFFER_SIZE);
         MsgProcMut {
             base,
             processor_mut: self.processor.clone(),
@@ -190,7 +187,7 @@ impl MsgProcConfig<MsgProcMut> {
 
 pub struct MsgProc {
     base: ConsumerBase,
-    processor: Processor,
+    processor: Arc<Box<dyn IProcessor>>,
     semaphore: Arc<Semaphore>,
 }
 
@@ -206,7 +203,7 @@ impl IMsgProc for MsgProc {
 
 pub struct MsgProcMut {
     base: ConsumerBase,
-    processor_mut: ProcessorMut,
+    processor_mut: Arc<Mutex<Box<dyn IProcessorMut>>>,
     buffer_size: usize,
 }
 

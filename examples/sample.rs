@@ -7,7 +7,7 @@ struct Processor;
 
 #[async_trait]
 impl IProcessor for Processor {
-    async fn execute(&self, msg: consumer::OwnedMessage) -> Result<(), &'static str> {
+    async fn execute(&self, msg: message::Message) -> Result<(), &'static str> {
         println!("{:?}", msg);
         Ok(())
     }

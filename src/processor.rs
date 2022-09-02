@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::kafka::consumer::OwnedMessage;
+use crate::kafka::message::Message;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -7,14 +7,14 @@ use tokio::sync::Mutex;
 
 #[async_trait]
 pub trait IProcessor: 'static + Send + Sync {
-    async fn execute(&self, msg: OwnedMessage) -> Result<(), &'static str>;
+    async fn execute(&self, msg: Message) -> Result<(), &'static str>;
 }
 
 pub struct DefaultProcessor;
 
 #[async_trait]
 impl IProcessor for DefaultProcessor {
-    async fn execute(&self, _msg: OwnedMessage) -> Result<(), &'static str> {
+    async fn execute(&self, _msg: Message) -> Result<(), &'static str> {
         // noop
         Ok(())
     }
@@ -40,7 +40,7 @@ impl Processor {
         }
     }
 
-    pub async fn run(&mut self, msg: OwnedMessage) -> Result<(), &'static str> {
+    pub async fn run(&mut self, msg: Message) -> Result<(), &'static str> {
         tokio::select! {
             res = self.proc.execute(msg) => { res }
             _ = self.context.done() => { Err("Already canceled.") }
@@ -50,14 +50,14 @@ impl Processor {
 
 #[async_trait]
 pub trait IProcessorMut: 'static + Send + Sync {
-    async fn execute(&mut self, msg: OwnedMessage) -> Result<(), &'static str>;
+    async fn execute(&mut self, msg: Message) -> Result<(), &'static str>;
 }
 
 pub struct DefaultProcessorMut;
 
 #[async_trait]
 impl IProcessorMut for DefaultProcessorMut {
-    async fn execute(&mut self, _msg: OwnedMessage) -> Result<(), &'static str> {
+    async fn execute(&mut self, _msg: Message) -> Result<(), &'static str> {
         // noop
         Ok(())
     }
@@ -83,7 +83,7 @@ impl ProcessorMut {
         }
     }
 
-    pub async fn run(&mut self, msg: OwnedMessage) -> Result<(), &'static str> {
+    pub async fn run(&mut self, msg: Message) -> Result<(), &'static str> {
         let mut processor_mut = self.proc.lock().await;
         tokio::select! {
             res = processor_mut.execute(msg) => { res }
@@ -95,23 +95,10 @@ impl ProcessorMut {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rdkafka::Timestamp;
+    use crate::kafka::message::testing::create_message;
     use tokio::sync::broadcast;
     use tokio::task;
     use tokio::time::{sleep, Duration};
-
-    fn create_message(topic: &str, partition: i32, offset: i64, payload: &str) -> OwnedMessage {
-        let payload: Vec<u8> = payload.as_bytes().to_vec();
-        OwnedMessage::new(
-            Some(payload),
-            None,
-            topic.to_string(),
-            Timestamp::CreateTime(0),
-            partition,
-            offset,
-            None,
-        )
-    }
 
     mod processor {
         use super::*;
@@ -119,7 +106,7 @@ mod tests {
 
         #[async_trait]
         impl IProcessor for HeavyComputingProcessor {
-            async fn execute(&self, _msg: OwnedMessage) -> Result<(), &'static str> {
+            async fn execute(&self, _msg: Message) -> Result<(), &'static str> {
                 loop {
                     sleep(Duration::from_secs(1)).await;
                 }
@@ -170,7 +157,7 @@ mod tests {
 
         #[async_trait]
         impl IProcessorMut for HeavyComputingProcessorMut {
-            async fn execute(&mut self, _msg: OwnedMessage) -> Result<(), &'static str> {
+            async fn execute(&mut self, _msg: Message) -> Result<(), &'static str> {
                 loop {
                     sleep(Duration::from_secs(1)).await;
                 }

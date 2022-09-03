@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 #[derive(Clone)]
-pub struct Context {
+pub(crate) struct Context {
     shutdown: Arc<AtomicBool>,
     notifier: broadcast::Sender<()>,
 }

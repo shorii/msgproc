@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 
-pub struct AnyOptions {
+pub(crate) struct AnyOptions {
     options: HashMap<String, Box<dyn Any>>,
 }
 

@@ -11,7 +11,7 @@ use tokio_stream::StreamExt;
 
 #[derive(Error, Debug)]
 #[error("ConsumeError occurred.")]
-pub struct ConsumeError {
+struct ConsumeError {
     msg: String,
     #[source]
     source: Option<anyhow::Error>,

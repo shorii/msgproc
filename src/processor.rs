@@ -10,7 +10,7 @@ pub trait IProcessor: 'static + Send + Sync {
     async fn execute(&mut self, msg: Message) -> Result<(), &'static str>;
 }
 
-pub struct DefaultProcessor;
+pub(crate) struct DefaultProcessor;
 
 #[async_trait]
 impl IProcessor for DefaultProcessor {
@@ -21,7 +21,7 @@ impl IProcessor for DefaultProcessor {
 }
 
 #[derive(Clone)]
-pub struct Processor {
+pub(crate) struct Processor {
     proc: Arc<Mutex<Box<dyn IProcessor>>>,
     context: Context,
     _shutdown_complete_tx: mpsc::Sender<()>,

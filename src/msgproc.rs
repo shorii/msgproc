@@ -9,6 +9,7 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex};
 
+/// [`MsgProc`](crate::msgproc::MsgProc)の設定
 pub struct MsgProcConfig {
     consumer_config: Option<StreamConsumerConfig>,
     topics: Vec<String>,
@@ -22,11 +23,15 @@ pub struct MsgProcConfig {
 impl MsgProcConfig {
     const PROCESSOR_BUFFER_SIZE: &'static str = "processor_buffer_size";
 
+    /// 空の設定を新規作成する
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn set<K, V>(&mut self, key: K, value: V) -> &mut Self
+    /// [`IStreamConsumer`](crate::kafka::consumer::IStreamConsumer)の設定値を設定する
+    ///
+    /// すでにkeyが設定されている場合、上書きが行われる。
+    pub fn set_stream_consumer_param<K, V>(&mut self, key: K, value: V) -> &mut Self
     where
         K: Into<String>,
         V: Into<String>,
@@ -38,12 +43,14 @@ impl MsgProcConfig {
         self
     }
 
-    pub fn topics(&mut self, topics: &[&str]) -> &mut Self {
+    /// [`IStreamConsumer`](crate::kafka::consumer::IStreamConsumer)で購読するトピックを設定する
+    pub fn set_topics(&mut self, topics: &[&str]) -> &mut Self {
         self.topics = topics.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         self
     }
 
-    pub fn consumer_buffer_size(&mut self, consumer_buffer_size: usize) -> &mut Self {
+    /// Kafkaから取得したメッセージを[`MessageStream`](crate::kafka::consumer::MessageStream)を通じて[`Consumer`](crate::consumer::Consumer)で取得する際に使用するチャネルの上限を設定する
+    pub fn set_consumer_buffer_size(&mut self, consumer_buffer_size: usize) -> &mut Self {
         self.consumer_config
             .as_mut()
             .unwrap()
@@ -51,17 +58,20 @@ impl MsgProcConfig {
         self
     }
 
-    pub fn processor_buffer_size(&mut self, processor_buffer_size: usize) -> &mut Self {
+    /// [`MessageStream`](crate::kafka::consumer::MessageStream)から取得したメッセージを[`IProcessor`](crate::processor::IProcessor)に送信する際に使用するチャネルの上限を設定する
+    pub fn set_processor_buffer_size(&mut self, processor_buffer_size: usize) -> &mut Self {
         self.options
             .set(Self::PROCESSOR_BUFFER_SIZE, processor_buffer_size);
         self
     }
 
-    pub fn processor(&mut self, processor: impl IProcessor) -> &mut Self {
+    /// [`IProcessor`](crate::processor::IProcessor)を設定する
+    pub fn set_processor(&mut self, processor: impl IProcessor) -> &mut Self {
         self.processor = Arc::new(Mutex::new(Box::new(processor)));
         self
     }
 
+    /// 現在の設定値を使用して[`MsgProc`](crate::msgproc::MsgProc)を作成する
     pub fn create(&mut self) -> MsgProc {
         let buffer_size = self.options.get(Self::PROCESSOR_BUFFER_SIZE);
         MsgProc {
@@ -98,6 +108,9 @@ impl Default for MsgProcConfig {
     }
 }
 
+/// Kafkaから消費したメッセージを処理する
+///
+/// メッセージを消費し、あらかじめ登録したprocessorにメッセージを配送する。
 pub struct MsgProc {
     consumer: Arc<Box<dyn IStreamConsumer>>,
     context: Context,
@@ -108,6 +121,9 @@ pub struct MsgProc {
 }
 
 impl MsgProc {
+    /// [`MsgProc`](MsgProc)を実行する
+    ///
+    /// * `shutdown` - 実行の中断を行うためのFuture
     pub async fn run(self, shutdown: impl Future + Send) {
         let mut consumer = Consumer::new(
             self.consumer,

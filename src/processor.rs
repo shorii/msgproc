@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
+/// [crate::msgproc::MsgProc]でProcessorを扱う際の一般的な表現
 #[async_trait]
 pub trait IProcessor: 'static + Send + Sync {
     async fn execute(&mut self, msg: Message) -> Result<(), &'static str>;

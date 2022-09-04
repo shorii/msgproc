@@ -1,5 +1,6 @@
 use crate::kafka::message::Message;
 use async_trait::async_trait;
+use log::debug;
 use rdkafka::consumer::stream_consumer::StreamConsumer as BaseStreamConsumer;
 use rdkafka::consumer::Consumer;
 use rdkafka::error::KafkaResult;
@@ -56,10 +57,12 @@ impl IStreamConsumer for StreamConsumer {
             let base_consumer = self.base_consumer.clone();
             async move {
                 loop {
+                    debug!("running consume stream before");
                     let message = match base_consumer.recv().await {
                         Ok(msg) => Ok(Message::new(msg.detach())),
                         Err(e) => Err(e),
                     };
+                    debug!("running consume stream after");
                     let _ = tx.send(message).await;
                 }
             }

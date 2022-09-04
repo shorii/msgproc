@@ -23,8 +23,14 @@ impl AnyOptions {
     where
         T: Any + Copy,
     {
-        let any_value = self.options.get_mut(key).unwrap();
-        let downcasted = any_value.downcast_mut::<T>().unwrap();
-        *downcasted = value;
+        match self.options.get_mut(key) {
+            Some(any_value) => {
+                let downcasted = any_value.downcast_mut::<T>().unwrap();
+                *downcasted = value;
+            }
+            None => {
+                self.options.insert(key.to_string(), Box::new(value));
+            }
+        }
     }
 }

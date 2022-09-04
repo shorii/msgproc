@@ -1,5 +1,6 @@
 use rdkafka::message::{Message as IMessage, OwnedMessage};
 
+/// ユーザ定義の[crate::processor::IProcessor]のImplementorで処理するデータ型
 #[derive(Clone, Debug)]
 pub struct Message {
     base: OwnedMessage,

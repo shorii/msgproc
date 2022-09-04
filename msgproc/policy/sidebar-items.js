@@ -1,1 +1,0 @@
-initSidebarItems({"struct":[["DefaultJobPolicy","デフォルトで提供されるポリシーの実装。"]],"trait":[["IJobPolicy","定期的に実行される処理のポリシーの一般的な表現。"]]});

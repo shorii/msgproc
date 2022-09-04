@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["consumer",""],["msg",""],["msgproc",""],["policy",""]]});
+window.SIDEBAR_ITEMS = {"mod":[["prelude",""]]};

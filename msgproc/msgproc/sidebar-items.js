@@ -1,1 +1,0 @@
-initSidebarItems({"struct":[["MsgProc","kafkaから消費したメッセージを処理する[Actor]"]]});

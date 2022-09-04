@@ -1,82 +1,44 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="kafkaのConsumerのトピックごとのオフセットなどをユーザ定義の 処理の結果に応じて管理するライブラリ。"><meta name="keywords" content="rust, rustlang, rust-lang, msgproc"><title>msgproc - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../dark.css" disabled><link rel="stylesheet" type="text/css" href="../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../storage.js"></script><script src="../crates.js"></script><script defer src="../main.js"></script>
-    <noscript><link rel="stylesheet" href="../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../favicon.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../msgproc/index.html"><div class="logo-container"><img class="rust-logo" src="../rust-logo.svg" alt="logo"></div>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="kafkaからメッセージを処理し、オフセットを更新するライブラリ。"><meta name="keywords" content="rust, rustlang, rust-lang, msgproc"><title>msgproc - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../dark.css" disabled><link rel="stylesheet" type="text/css" href="../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../storage.js"></script><script defer src="../crates.js"></script><script defer src="../main.js"></script><noscript><link rel="stylesheet" href="../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../favicon.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../msgproc/index.html"><div class="logo-container"><img class="rust-logo" src="../rust-logo.svg" alt="logo"></div>
         </a><h2 class="location"></h2>
     </nav>
     <nav class="sidebar"><a class="sidebar-logo" href="../msgproc/index.html"><div class="logo-container"><img class="rust-logo" src="../rust-logo.svg" alt="logo"></div>
-        </a><h2 class="location"><a href="#">Crate msgproc</a></h2><div class="sidebar-elems"><div class="block"><ul><li class="version">Version 0.1.0</li><li><a id="all-types" href="all.html">All Items</a></li></div></ul><section><div class="block"><ul><li><a href="#modules">Modules</a></li></ul></div></section><div id="sidebar-vars" data-name="msgproc" data-ty="mod" data-relpath=""></div><script defer src="sidebar-items.js"></script></div></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../msgproc/index.html"><img class="rust-logo" src="../rust-logo.svg" alt="logo"></a><nav class="sub"><div class="theme-picker hidden"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu" title="themes"><img width="22" height="22" alt="Pick another theme!" src="../brush.svg"></button><div id="theme-choices" role="menu"></div></div><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><a id="settings-menu" href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../wheel.svg"></a></div></form></nav></div><section id="main-content" class="content"><div class="main-heading">
-    <h1 class="fqn"><span class="in-band">Crate <a class="mod" href="#">msgproc</a><button id="copy-path" onclick="copy_path(this)" title="Copy item path to clipboard"><img src="../clipboard.svg" width="19" height="18" alt="Copy item path"></button></span></h1><span class="out-of-band"><a class="srclink" href="../src/msgproc/lib.rs.html#1-83">source</a> · <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class="inner">&#x2212;</span>]</a></span></div><details class="rustdoc-toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>kafkaのConsumerのトピックごとのオフセットなどをユーザ定義の
-処理の結果に応じて管理するライブラリ。</p>
+        </a><h2 class="location"><a href="#">Crate msgproc</a></h2><div class="sidebar-elems"><div class="block"><ul><li class="version">Version 0.1.0</li><li><a id="all-types" href="all.html">All Items</a></li></ul></div><section><div class="block"><ul><li><a href="#modules">Modules</a></li></ul></div></section></div></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../msgproc/index.html"><img class="rust-logo" src="../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><div id="settings-menu" tabindex="-1">
+                                <a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../wheel.svg"></a></div>
+                        </div></form></nav></div><section id="main-content" class="content"><div class="main-heading">
+    <h1 class="fqn"><span class="in-band">Crate <a class="mod" href="#">msgproc</a><button id="copy-path" onclick="copy_path(this)" title="Copy item path to clipboard"><img src="../clipboard.svg" width="19" height="18" alt="Copy item path"></button></span></h1><span class="out-of-band"><a class="srclink" href="../src/msgproc/lib.rs.html#1-50">source</a> · <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class="inner">&#x2212;</span>]</a></span></div><details class="rustdoc-toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>kafkaからメッセージを処理し、オフセットを更新するライブラリ。</p>
 <h4 id="features"><a href="#features">Features</a></h4>
 <ul>
-<li>トピックごとにオフセットを処理の結果に応じて管理</li>
-<li>トピックを正規表現によって指定可能で、<a href="msgproc/struct.MsgProc.html" title="msgproc::MsgProc">msgproc::MsgProc</a>動作中にkafkaに存在するトピックが変化した場合自動的に更新</li>
-<li>ポリシーによるkafkaとのやり取り失敗時の挙動の制御、メッセージの消費速度、トピック更新速度の制御</li>
+<li><a href="prelude/trait.IProcessor.html" title="processor::IProcessor">processor::IProcessor</a>を実装することでメッセージの処理部分を組み込むことができる</li>
 </ul>
 <h4 id="examples"><a href="#examples">Examples</a></h4>
-<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use</span> <span class="ident">msgproc::policy::DefaultJobPolicy</span>;
-<span class="kw">use</span> <span class="ident">msgproc::msgproc::MsgProc</span>;
-<span class="kw">use</span> <span class="ident">msgproc::msg</span>::{<span class="ident">Msg</span>, <span class="ident">MsgProcessor</span>};
-<span class="kw">use</span> <span class="ident">rdkafka::consumer::BaseConsumer</span>;
-<span class="kw">use</span> <span class="ident">rdkafka::ClientConfig</span>;
-<span class="kw">use</span> <span class="ident">std::time::Duration</span>;
-<span class="kw">use</span> <span class="ident">regex::Regex</span>;
-<span class="kw">use</span> <span class="ident">actix::prelude</span>::<span class="kw-2">*</span>;
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
+<span class="kw">use</span> <span class="ident">env_logger</span>;
+<span class="kw">use</span> <span class="ident">msgproc::prelude</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="ident">tokio::signal</span>;
 
-<span class="kw">struct</span> <span class="ident">PrintProcessor</span>;
+<span class="kw">struct</span> <span class="ident">Processor</span>;
 
-<span class="kw">fn</span> <span class="ident">something_went_wrong</span>() -&gt; <span class="ident">bool</span> {
-    <span class="bool-val">true</span>
-}
-
-<span class="kw">impl</span> <span class="ident">Actor</span> <span class="kw">for</span> <span class="ident">PrintProcessor</span> {
-    <span class="kw">type</span> <span class="ident">Context</span> <span class="op">=</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>;
-}
-
-<span class="kw">impl</span> <span class="ident">Handler</span><span class="op">&lt;</span><span class="ident">Msg</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">PrintProcessor</span> {
-    <span class="kw">type</span> <span class="prelude-ty">Result</span> <span class="op">=</span> ();
-    <span class="kw">fn</span> <span class="ident">handle</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">msg</span>: <span class="ident">Msg</span>, <span class="ident">ctx</span>: <span class="kw-2">&amp;mut</span> <span class="ident"><span class="self">Self</span>::Context</span>) -&gt; <span class="ident"><span class="self">Self</span>::Result</span> {
-        <span class="kw">let</span> <span class="ident">owned_message</span> <span class="op">=</span> <span class="ident">msg</span>.<span class="ident">get_owned_message</span>();
-        <span class="kw">if</span> <span class="ident">something_went_wrong</span>() {
-            <span class="ident">msg</span>.<span class="ident">mark_as_error</span>(<span class="string">&quot;Something went wrong!&quot;</span>)
-        } <span class="kw">else</span> {
-            <span class="macro">println!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">owned_message</span>);
-        }
+<span class="attribute">#[<span class="ident">async_trait</span>]</span>
+<span class="kw">impl</span> <span class="ident">IProcessor</span> <span class="kw">for</span> <span class="ident">Processor</span> {
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">execute</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">msg</span>: <span class="ident">message::Message</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span><span class="op">&gt;</span> {
+        <span class="macro">println!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">msg</span>);
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
-<span class="attribute">#[<span class="ident">actix::main</span>]</span>
+<span class="attribute">#[<span class="ident">tokio::main</span>]</span>
 <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">main</span>() {
-    <span class="kw">let</span> <span class="ident">topic_patterns</span> <span class="op">=</span> <span class="macro">vec!</span>[
-        <span class="ident">Regex::new</span>(<span class="string">&quot;^sample-.*&quot;</span>).<span class="ident">unwrap</span>()
-    ];
-    <span class="kw">let</span> <span class="ident">consumer</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="ident">BaseConsumer</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Box::new</span>(
-        <span class="ident">ClientConfig::new</span>()
-            .<span class="ident">set</span>(<span class="string">&quot;group_id&quot;</span>, <span class="string">&quot;group1&quot;</span>)
-            .<span class="ident">set</span>(<span class="string">&quot;bootstrap.servers&quot;</span>, <span class="string">&quot;localhost:9092&quot;</span>)
-            .<span class="ident">set</span>(<span class="string">&quot;enable.auto.commit&quot;</span>, <span class="string">&quot;false&quot;</span>)
-            .<span class="ident">set</span>(<span class="string">&quot;session.timeout.ms&quot;</span>, <span class="string">&quot;6000&quot;</span>)
-            .<span class="ident">create</span>().<span class="ident">unwrap</span>()
-    );
-    <span class="kw">let</span> <span class="ident">update_topic_policy</span> <span class="op">=</span> <span class="ident">Box::new</span>(
-        <span class="ident">DefaultJobPolicy::new</span>(<span class="ident">Duration::from_secs</span>(<span class="number">3600</span>), <span class="number">5</span>)
-    );
-    <span class="kw">let</span> <span class="ident">consume_message_policy</span> <span class="op">=</span> <span class="ident">Box::new</span>(
-        <span class="ident">DefaultJobPolicy::new</span>(<span class="ident">Duration::from_secs</span>(<span class="number">0</span>), <span class="number">5</span>)
-    );
-    <span class="kw">let</span> <span class="ident">timeout</span> <span class="op">=</span> <span class="ident">Duration::from_secs</span>(<span class="number">5</span>);
-    <span class="kw">let</span> <span class="ident">msgproc</span> <span class="op">=</span> <span class="ident">MsgProc::new</span>(
-        <span class="ident">topic_patterns</span>,
-        <span class="ident">consumer</span>,
-        <span class="ident">update_topic_policy</span>,
-        <span class="ident">consume_message_policy</span>,
-        <span class="ident">timeout</span>,
-    );
-    <span class="kw">let</span> <span class="ident">msgproc_addr</span> <span class="op">=</span> <span class="ident">msgproc</span>.<span class="ident">start</span>();
-    <span class="ident">msgproc_addr</span>
-        .<span class="ident">send</span>(<span class="ident">MsgProcessor</span>(<span class="ident">PrintProcessor</span>.<span class="ident">start</span>().<span class="ident">recipient</span>()))
-        .<span class="kw">await</span>
-        .<span class="ident">unwrap</span>();
+    <span class="ident">env_logger::init</span>();
+    <span class="kw">let</span> <span class="ident">msgproc</span> <span class="op">=</span> <span class="ident">MsgProcConfig::new</span>()
+        .<span class="ident">set_stream_consumer_param</span>(<span class="string">&quot;bootstrap.servers&quot;</span>, <span class="string">&quot;localhost:9092&quot;</span>)
+        .<span class="ident">set_stream_consumer_param</span>(<span class="string">&quot;group.id&quot;</span>, <span class="string">&quot;group&quot;</span>)
+        .<span class="ident">set_stream_consumer_param</span>(<span class="string">&quot;session.timeout.ms&quot;</span>, <span class="string">&quot;6000&quot;</span>)
+        .<span class="ident">set_stream_consumer_param</span>(<span class="string">&quot;max.poll.interval.ms&quot;</span>, <span class="string">&quot;6000&quot;</span>)
+        .<span class="ident">set_topics</span>(<span class="kw-2">&amp;</span>[<span class="string">&quot;sample_topic&quot;</span>])
+        .<span class="ident">set_processor</span>(<span class="ident">Processor</span>)
+        .<span class="ident">create</span>();
+    <span class="ident">msgproc</span>.<span class="ident">run</span>(<span class="ident">signal::ctrl_c</span>()).<span class="kw">await</span>;
 }</code></pre></div>
 </div></details><h2 id="modules" class="small-section-header"><a href="#modules">Modules</a></h2>
-<div class="item-table"><div class="item-row"><div class="item-left module-item"><a class="mod" href="consumer/index.html" title="msgproc::consumer mod">consumer</a></div><div class="item-right docblock-short"></div></div><div class="item-row"><div class="item-left module-item"><a class="mod" href="msg/index.html" title="msgproc::msg mod">msg</a></div><div class="item-right docblock-short"></div></div><div class="item-row"><div class="item-left module-item"><a class="mod" href="msgproc/index.html" title="msgproc::msgproc mod">msgproc</a></div><div class="item-right docblock-short"></div></div><div class="item-row"><div class="item-left module-item"><a class="mod" href="policy/index.html" title="msgproc::policy mod">policy</a></div><div class="item-right docblock-short"></div></div></div></section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../" data-current-crate="msgproc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.61.0 (fe5b13d68 2022-05-18)" ></div>
+<div class="item-table"><div class="item-row"><div class="item-left module-item"><a class="mod" href="prelude/index.html" title="msgproc::prelude mod">prelude</a></div><div class="item-right docblock-short"></div></div></div></section></div></main><div id="rustdoc-vars" data-root-path="../" data-current-crate="msgproc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0 (4b91a6ea7 2022-08-08)" ></div>
 </body></html>

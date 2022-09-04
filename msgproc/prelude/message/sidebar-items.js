@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["Message","ユーザ定義の[crate::processor::IProcessor]のImplementorで処理するデータ型"]]};

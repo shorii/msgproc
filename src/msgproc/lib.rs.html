@@ -1,9 +1,10 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script src="../../crates.js"></script><script defer src="../../main.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script>
-    <noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../msgproc/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../msgproc/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div>
         </a><h2 class="location"></h2>
     </nav>
     <nav class="sidebar"><a class="sidebar-logo" href="../../msgproc/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div>
-        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../msgproc/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><div class="theme-picker hidden"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu" title="themes"><img width="22" height="22" alt="Pick another theme!" src="../../brush.svg"></button><div id="theme-choices" role="menu"></div></div><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><a id="settings-menu" href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
+        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../msgproc/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><div id="settings-menu" tabindex="-1">
+                                <a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div>
+                        </div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -53,122 +54,56 @@
 <span id="48">48</span>
 <span id="49">49</span>
 <span id="50">50</span>
-<span id="51">51</span>
-<span id="52">52</span>
-<span id="53">53</span>
-<span id="54">54</span>
-<span id="55">55</span>
-<span id="56">56</span>
-<span id="57">57</span>
-<span id="58">58</span>
-<span id="59">59</span>
-<span id="60">60</span>
-<span id="61">61</span>
-<span id="62">62</span>
-<span id="63">63</span>
-<span id="64">64</span>
-<span id="65">65</span>
-<span id="66">66</span>
-<span id="67">67</span>
-<span id="68">68</span>
-<span id="69">69</span>
-<span id="70">70</span>
-<span id="71">71</span>
-<span id="72">72</span>
-<span id="73">73</span>
-<span id="74">74</span>
-<span id="75">75</span>
-<span id="76">76</span>
-<span id="77">77</span>
-<span id="78">78</span>
-<span id="79">79</span>
-<span id="80">80</span>
-<span id="81">81</span>
-<span id="82">82</span>
-<span id="83">83</span>
-</pre><pre class="rust"><code><span class="doccomment">//! kafkaのConsumerのトピックごとのオフセットなどをユーザ定義の</span>
-<span class="doccomment">//! 処理の結果に応じて管理するライブラリ。</span>
+</pre><pre class="rust"><code><span class="doccomment">//! kafkaからメッセージを処理し、オフセットを更新するライブラリ。</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! ### Features</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! - トピックごとにオフセットを処理の結果に応じて管理</span>
-<span class="doccomment">//! - トピックを正規表現によって指定可能で、[msgproc::MsgProc]動作中にkafkaに存在するトピックが変化した場合自動的に更新</span>
-<span class="doccomment">//! - ポリシーによるkafkaとのやり取り失敗時の挙動の制御、メッセージの消費速度、トピック更新速度の制御</span>
+<span class="doccomment">//! - [processor::IProcessor]を実装することでメッセージの処理部分を組み込むことができる</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! ### Examples</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! ```no_run</span>
-<span class="doccomment">//! use msgproc::policy::DefaultJobPolicy;</span>
-<span class="doccomment">//! use msgproc::msgproc::MsgProc;</span>
-<span class="doccomment">//! use msgproc::msg::{Msg, MsgProcessor};</span>
-<span class="doccomment">//! use rdkafka::consumer::BaseConsumer;</span>
-<span class="doccomment">//! use rdkafka::ClientConfig;</span>
-<span class="doccomment">//! use std::time::Duration;</span>
-<span class="doccomment">//! use regex::Regex;</span>
-<span class="doccomment">//! use actix::prelude::*;</span>
+<span class="doccomment">//! use async_trait::async_trait;</span>
+<span class="doccomment">//! use env_logger;</span>
+<span class="doccomment">//! use msgproc::prelude::*;</span>
+<span class="doccomment">//! use tokio::signal;</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! struct PrintProcessor;</span>
+<span class="doccomment">//! struct Processor;</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! fn something_went_wrong() -&gt; bool {</span>
-<span class="doccomment">//!     true</span>
-<span class="doccomment">//! }</span>
-<span class="doccomment">//!</span>
-<span class="doccomment">//! impl Actor for PrintProcessor {</span>
-<span class="doccomment">//!     type Context = Context&lt;Self&gt;;</span>
-<span class="doccomment">//! }</span>
-<span class="doccomment">//!</span>
-<span class="doccomment">//! impl Handler&lt;Msg&gt; for PrintProcessor {</span>
-<span class="doccomment">//!     type Result = ();</span>
-<span class="doccomment">//!     fn handle(&amp;mut self, msg: Msg, ctx: &amp;mut Self::Context) -&gt; Self::Result {</span>
-<span class="doccomment">//!         let owned_message = msg.get_owned_message();</span>
-<span class="doccomment">//!         if something_went_wrong() {</span>
-<span class="doccomment">//!             msg.mark_as_error(&quot;Something went wrong!&quot;)</span>
-<span class="doccomment">//!         } else {</span>
-<span class="doccomment">//!             println!(&quot;{:?}&quot;, owned_message);</span>
-<span class="doccomment">//!         }</span>
+<span class="doccomment">//! #[async_trait]</span>
+<span class="doccomment">//! impl IProcessor for Processor {</span>
+<span class="doccomment">//!     async fn execute(&amp;mut self, msg: message::Message) -&gt; Result&lt;(), &amp;&#39;static str&gt; {</span>
+<span class="doccomment">//!         println!(&quot;{:?}&quot;, msg);</span>
+<span class="doccomment">//!         Ok(())</span>
 <span class="doccomment">//!     }</span>
 <span class="doccomment">//! }</span>
 <span class="doccomment">//!</span>
-<span class="doccomment">//! #[actix::main]</span>
+<span class="doccomment">//! #[tokio::main]</span>
 <span class="doccomment">//! async fn main() {</span>
-<span class="doccomment">//!     let topic_patterns = vec![</span>
-<span class="doccomment">//!         Regex::new(&quot;^sample-.*&quot;).unwrap()</span>
-<span class="doccomment">//!     ];</span>
-<span class="doccomment">//!     let consumer: Box&lt;BaseConsumer&gt; = Box::new(</span>
-<span class="doccomment">//!         ClientConfig::new()</span>
-<span class="doccomment">//!             .set(&quot;group_id&quot;, &quot;group1&quot;)</span>
-<span class="doccomment">//!             .set(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;)</span>
-<span class="doccomment">//!             .set(&quot;enable.auto.commit&quot;, &quot;false&quot;)</span>
-<span class="doccomment">//!             .set(&quot;session.timeout.ms&quot;, &quot;6000&quot;)</span>
-<span class="doccomment">//!             .create().unwrap()</span>
-<span class="doccomment">//!     );</span>
-<span class="doccomment">//!     let update_topic_policy = Box::new(</span>
-<span class="doccomment">//!         DefaultJobPolicy::new(Duration::from_secs(3600), 5)</span>
-<span class="doccomment">//!     );</span>
-<span class="doccomment">//!     let consume_message_policy = Box::new(</span>
-<span class="doccomment">//!         DefaultJobPolicy::new(Duration::from_secs(0), 5)</span>
-<span class="doccomment">//!     );</span>
-<span class="doccomment">//!     let timeout = Duration::from_secs(5);</span>
-<span class="doccomment">//!     let msgproc = MsgProc::new(</span>
-<span class="doccomment">//!         topic_patterns,</span>
-<span class="doccomment">//!         consumer,</span>
-<span class="doccomment">//!         update_topic_policy,</span>
-<span class="doccomment">//!         consume_message_policy,</span>
-<span class="doccomment">//!         timeout,</span>
-<span class="doccomment">//!     );</span>
-<span class="doccomment">//!     let msgproc_addr = msgproc.start();</span>
-<span class="doccomment">//!     msgproc_addr</span>
-<span class="doccomment">//!         .send(MsgProcessor(PrintProcessor.start().recipient()))</span>
-<span class="doccomment">//!         .await</span>
-<span class="doccomment">//!         .unwrap();</span>
+<span class="doccomment">//!     env_logger::init();</span>
+<span class="doccomment">//!     let msgproc = MsgProcConfig::new()</span>
+<span class="doccomment">//!         .set_stream_consumer_param(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;)</span>
+<span class="doccomment">//!         .set_stream_consumer_param(&quot;group.id&quot;, &quot;group&quot;)</span>
+<span class="doccomment">//!         .set_stream_consumer_param(&quot;session.timeout.ms&quot;, &quot;6000&quot;)</span>
+<span class="doccomment">//!         .set_stream_consumer_param(&quot;max.poll.interval.ms&quot;, &quot;6000&quot;)</span>
+<span class="doccomment">//!         .set_topics(&amp;[&quot;sample_topic&quot;])</span>
+<span class="doccomment">//!         .set_processor(Processor)</span>
+<span class="doccomment">//!         .create();</span>
+<span class="doccomment">//!     msgproc.run(signal::ctrl_c()).await;</span>
 <span class="doccomment">//! }</span>
 <span class="doccomment">//! ```</span>
+<span class="kw">mod</span> <span class="ident">consumer</span>;
+<span class="kw">mod</span> <span class="ident">context</span>;
+<span class="kw">mod</span> <span class="ident">kafka</span>;
+<span class="kw">mod</span> <span class="ident">msgproc</span>;
+<span class="kw">mod</span> <span class="ident">options</span>;
+<span class="kw">mod</span> <span class="ident">processor</span>;
 
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">consumer</span>;
-<span class="kw">mod</span> <span class="ident">error</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">msg</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">msgproc</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">policy</span>;
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">prelude</span> {
+    <span class="kw">pub</span> <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::kafka</span>::<span class="kw-2">*</span>;
+    <span class="kw">pub</span> <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::msgproc</span>::<span class="kw-2">*</span>;
+    <span class="kw">pub</span> <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::processor</span>::<span class="kw-2">*</span>;
+}
 </code></pre></div>
-</section><section id="search" class="content hidden"></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="msgproc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.61.0 (fe5b13d68 2022-05-18)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="msgproc" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0 (4b91a6ea7 2022-08-08)" ></div>
 </body></html>

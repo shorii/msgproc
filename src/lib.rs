@@ -1,83 +1,50 @@
-//! kafkaのConsumerのトピックごとのオフセットなどをユーザ定義の
-//! 処理の結果に応じて管理するライブラリ。
+//! kafkaからメッセージを処理し、オフセットを更新するライブラリ。
 //!
 //! ### Features
 //!
-//! - トピックごとにオフセットを処理の結果に応じて管理
-//! - トピックを正規表現によって指定可能で、[msgproc::MsgProc]動作中にkafkaに存在するトピックが変化した場合自動的に更新
-//! - ポリシーによるkafkaとのやり取り失敗時の挙動の制御、メッセージの消費速度、トピック更新速度の制御
+//! - [processor::IProcessor]を実装することでメッセージの処理部分を組み込むことができる
 //!
 //! ### Examples
 //!
 //! ```no_run
-//! use msgproc::policy::DefaultJobPolicy;
-//! use msgproc::msgproc::MsgProc;
-//! use msgproc::msg::{Msg, MsgProcessor};
-//! use rdkafka::consumer::BaseConsumer;
-//! use rdkafka::ClientConfig;
-//! use std::time::Duration;
-//! use regex::Regex;
-//! use actix::prelude::*;
+//! use async_trait::async_trait;
+//! use env_logger;
+//! use msgproc::prelude::*;
+//! use tokio::signal;
 //!
-//! struct PrintProcessor;
+//! struct Processor;
 //!
-//! fn something_went_wrong() -> bool {
-//!     true
-//! }
-//!
-//! impl Actor for PrintProcessor {
-//!     type Context = Context<Self>;
-//! }
-//!
-//! impl Handler<Msg> for PrintProcessor {
-//!     type Result = ();
-//!     fn handle(&mut self, msg: Msg, ctx: &mut Self::Context) -> Self::Result {
-//!         let owned_message = msg.get_owned_message();
-//!         if something_went_wrong() {
-//!             msg.mark_as_error("Something went wrong!")
-//!         } else {
-//!             println!("{:?}", owned_message);
-//!         }
+//! #[async_trait]
+//! impl IProcessor for Processor {
+//!     async fn execute(&mut self, msg: message::Message) -> Result<(), &'static str> {
+//!         println!("{:?}", msg);
+//!         Ok(())
 //!     }
 //! }
 //!
-//! #[actix::main]
+//! #[tokio::main]
 //! async fn main() {
-//!     let topic_patterns = vec![
-//!         Regex::new("^sample-.*").unwrap()
-//!     ];
-//!     let consumer: Box<BaseConsumer> = Box::new(
-//!         ClientConfig::new()
-//!             .set("group_id", "group1")
-//!             .set("bootstrap.servers", "localhost:9092")
-//!             .set("enable.auto.commit", "false")
-//!             .set("session.timeout.ms", "6000")
-//!             .create().unwrap()
-//!     );
-//!     let update_topic_policy = Box::new(
-//!         DefaultJobPolicy::new(Duration::from_secs(3600), 5)
-//!     );
-//!     let consume_message_policy = Box::new(
-//!         DefaultJobPolicy::new(Duration::from_secs(0), 5)
-//!     );
-//!     let timeout = Duration::from_secs(5);
-//!     let msgproc = MsgProc::new(
-//!         topic_patterns,
-//!         consumer,
-//!         update_topic_policy,
-//!         consume_message_policy,
-//!         timeout,
-//!     );
-//!     let msgproc_addr = msgproc.start();
-//!     msgproc_addr
-//!         .send(MsgProcessor(PrintProcessor.start().recipient()))
-//!         .await
-//!         .unwrap();
+//!     env_logger::init();
+//!     let msgproc = MsgProcConfig::new()
+//!         .set_stream_consumer_param("bootstrap.servers", "localhost:9092")
+//!         .set_stream_consumer_param("group.id", "group")
+//!         .set_stream_consumer_param("session.timeout.ms", "6000")
+//!         .set_stream_consumer_param("max.poll.interval.ms", "6000")
+//!         .set_topics(&["sample_topic"])
+//!         .set_processor(Processor)
+//!         .create();
+//!     msgproc.run(signal::ctrl_c()).await;
 //! }
 //! ```
+mod consumer;
+mod context;
+mod kafka;
+mod msgproc;
+mod options;
+mod processor;
 
-pub mod consumer;
-mod error;
-pub mod msg;
-pub mod msgproc;
-pub mod policy;
+pub mod prelude {
+    pub use super::kafka::*;
+    pub use super::msgproc::*;
+    pub use super::processor::*;
+}

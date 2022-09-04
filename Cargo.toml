@@ -8,6 +8,8 @@ version = "0.1.0"
 [dependencies]
 actix = "0.13.0"
 anyhow = "1.0.56"
+async-trait = "0.1.57"
+bytes = "1.2.1"
 clap = {version = "3.1.10", features = ["derive"]}
 crossbeam = "0.8.1"
 env_logger = "0.9.0"
@@ -18,6 +20,7 @@ regex = "1.5.5"
 serde = "1.0.136"
 serde_json = "1.0.79"
 signal-hook = "0.3.13"
-thiserror = "1.0.31"
-tokio = {version = "1.19.0", features = ["rt-multi-thread"]}
+thiserror = "1.0.32"
+tokio = {version = "1.20.1", features = ["rt-multi-thread", "macros", "rt", "sync"]}
+tokio-stream = "0.1.9"
 uuid = {version = "1.1.1", features = ["v4"]}

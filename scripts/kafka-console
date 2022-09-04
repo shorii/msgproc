@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+operation=$1;
+topic=$2;
+
+container=$(docker ps -q -f "name=development_kafka")
+
+docker exec -it $container /opt/kafka/bin/kafka-console-$operation.sh --bootstrap-server localhost:9092 --topic $topic

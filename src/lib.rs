@@ -26,12 +26,12 @@
 //! async fn main() {
 //!     env_logger::init();
 //!     let msgproc = MsgProcConfig::new()
-//!         .set("bootstrap.servers", "localhost:9092")
-//!         .set("group.id", "group")
-//!         .set("session.timeout.ms", "6000")
-//!         .set("max.poll.interval.ms", "6000")
-//!         .topics(&["sample_topic"])
-//!         .processor(Processor)
+//!         .set_stream_consumer_param("bootstrap.servers", "localhost:9092")
+//!         .set_stream_consumer_param("group.id", "group")
+//!         .set_stream_consumer_param("session.timeout.ms", "6000")
+//!         .set_stream_consumer_param("max.poll.interval.ms", "6000")
+//!         .set_topics(&["sample_topic"])
+//!         .set_processor(Processor)
 //!         .create();
 //!     msgproc.run(signal::ctrl_c()).await;
 //! }

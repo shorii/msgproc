@@ -74,10 +74,12 @@ impl MsgProcConfig {
     /// 現在の設定値を使用して[`MsgProc`](crate::msgproc::MsgProc)を作成する
     pub fn create(&mut self) -> MsgProc {
         let buffer_size = self.options.get(Self::PROCESSOR_BUFFER_SIZE);
+        let consumer = self.consumer_config.clone().unwrap().create().unwrap();
+        consumer
+            .subscribe(&self.topics.iter().map(|t| t.as_str()).collect::<Vec<_>>())
+            .unwrap();
         MsgProc {
-            consumer: Arc::new(Box::new(
-                self.consumer_config.clone().unwrap().create().unwrap(),
-            )),
+            consumer: Arc::new(Box::new(consumer)),
             context: self.context.clone(),
             shutdown_complete_rx: self.shutdown_complete_rx.take(),
             shutdown_complete_tx: self.shutdown_complete_tx.take(),

@@ -1,4 +1,4 @@
-use rdkafka::message::{Message as IMessage, OwnedMessage};
+use rdkafka::message::{FromBytes, Message as IMessage, OwnedMessage};
 
 /// ユーザ定義の[crate::processor::IProcessor]のImplementorで処理するデータ型
 #[derive(Clone, Debug)]
@@ -21,6 +21,10 @@ impl Message {
 
     pub fn offset(&self) -> i64 {
         self.base.offset()
+    }
+
+    pub fn payload<P: ?Sized + FromBytes>(&self) -> Option<Result<&P, P::Error>> {
+        self.base.payload_view::<P>()
     }
 }
 
